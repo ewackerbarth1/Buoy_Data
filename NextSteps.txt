@@ -1,0 +1,6 @@
+Next steps:
+-- Figure out what all of the data columns correspond to
+-- Work on visualization
+-- Get locations corresponding to buoys
+-- Plot buoy locations on map
+-- Visualize swell size and direction with arrows (length of arrow can map to size)
