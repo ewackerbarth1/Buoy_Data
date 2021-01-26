@@ -1,6 +1,7 @@
 Next steps:
--- Figure out what all of the data columns correspond to
+-- Collect active buoy station lat and long 
+---- https://www.ndbc.noaa.gov/to_station.shtml , under the "National Data Buoy Center Stations" heading
+-- Write script to collect all available buoy data from a region center at (lat1, long1)
 -- Work on visualization
--- Get locations corresponding to buoys
--- Plot buoy locations on map
--- Visualize swell size and direction with arrows (length of arrow can map to size)
+---- Map with selected buoys
+---- Visualize swell size and direction with arrows (length of arrow can map to size)
