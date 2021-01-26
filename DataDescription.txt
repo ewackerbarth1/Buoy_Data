@@ -1,0 +1,5 @@
+Description of Buoy Data at:
+https://www.ndbc.noaa.gov/measdes.shtml#stdmet
+
+WVHT & APD are averages
+SwH & SwP seem to be one-time measurements at some point during 20 minute interval
