@@ -2,6 +2,7 @@
 
 import requests
 from bs4 import BeautifulSoup
+import pandas as pd
 
 
 def constructBuoyDict():
@@ -30,7 +31,7 @@ def constructBuoyDict():
         thisKey = buoy.get("id")
         thisLon = buoy.get("lon")
         thisLat = buoy.get("lat")
-        buoysDict[thisKey] = (thisLat, thisLon)
+        buoysDict[thisKey] = (float(thisLat), float(thisLon))
 
     return buoysDict
 
@@ -74,12 +75,12 @@ def findNearbyBuoys(buoysDict, lat, lon, dLat, dLon):
     for key in buoysDict:
         latLonTup = buoysDict[key]
         # check latitude (-90, 90 deg)
-        latCheck = intervalCheck(lat, dLat, float(latLonTup[0]), 90)
+        latCheck = intervalCheck(lat, dLat, latLonTup[0], 90)
 
         # check longitude (-180, 180 deg)
-        lonCheck = intervalCheck(lon, dLon, float(latLonTup[1]), 180)
+        lonCheck = intervalCheck(lon, dLon, latLonTup[1], 180)
         if latCheck and lonCheck:
-            nearbyBuoys[key] = (float(latLonTup[0]), float(latLonTup[1]))
+            nearbyBuoys[key] = latLonTup
 
     print('# of buoys in region of interest = ' + str(len(nearbyBuoys)))
     return nearbyBuoys
@@ -119,3 +120,23 @@ def intervalCheck(x, dx, x0, halfRange):
                 return False
         else:
             return False
+
+
+def buoysDictToDF(buoysDict):
+    '''
+    Constructs a buoy data frame given the dictionary input
+
+    Inputs:
+        buoysDict (dict): dictionary with key = 'ID', value = (lat, lon)
+
+    Outputs:
+        buoysDF (DataFrame): data frame with 3 columns, 1) ID, 2) lat, 3) lon
+    '''
+
+    buoysDF = pd.DataFrame(buoysDict.items(), columns=['ID', 'latlon'])
+    #print(buoysDF)
+    buoysDF[['lat', 'lon']] = pd.DataFrame(buoysDF['latlon'].tolist())
+    buoysDF.pop('latlon')
+    #print(buoysDF)
+
+    return buoysDF
