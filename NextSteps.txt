@@ -1,7 +1,12 @@
 Next steps:
--- Collect active buoy station lat and long 
----- https://www.ndbc.noaa.gov/to_station.shtml , under the "National Data Buoy Center Stations" heading
--- Write script to collect all available buoy data from a region center at (lat1, long1)
+
+-- Function to grab buoy data for particular date and time
+
 -- Work on visualization
----- Map with selected buoys
----- Visualize swell size and direction with arrows (length of arrow can map to size)
+---- Visualize swell size and direction with arrows: arrow length <--> period, arrow width <--> swell size
+
+-- Develop metrics:
+---- what % of data points is the current value greater than?
+
+NDBC Web Data Guide at:
+https://www.ndbc.noaa.gov/docs/ndbc_web_data_guide.pdf
