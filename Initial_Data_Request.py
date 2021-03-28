@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 import re
 import pandas as pd
 import matplotlib.pyplot as plt
+from BuoyDataUtilities import cleanBuoyData
 
 # build url for buoy data
 buoyID = '46047'
@@ -39,6 +40,15 @@ entryList = [re.split(" +", iRow) for iRow in rowList]
 # build data frame
 dFrame1 = pd.DataFrame(entryList[2:], columns = entryList[0])  # ignore first 2 rows
 
+print(dFrame1)
+
+# add a date column
+dFrame1['Date'] = dFrame1['#YY'] + dFrame1['MM'] + dFrame1['DD'] + dFrame1['hh'] + dFrame1['mm']
+
+# drop unncessary columns
+to_drop = ['#YY', 'MM', 'DD', 'hh', 'mm', 'STEEPNESS']
+dFrame1.drop(to_drop, inplace=True, axis=1)
+
 # add 'samples' column that goes from 1 to the number of rows in data frame
 dfSize = dFrame1.shape # 2 element tuple (nRows, nColumns)
 nRows = dfSize[0]
@@ -47,14 +57,22 @@ dFrame1['Samples'] = samplesList
 
 print(dFrame1)
 
+#print(type(dFrame1["WVHT"]))
+#print(dFrame1["SwP"])
+
+# clean data
+dFrame1 = dFrame1.applymap(cleanBuoyData)
+
 # change types of dataFrame columns
 dFrame1["WVHT"] = pd.to_numeric(dFrame1["WVHT"])
 dFrame1["SwP"] = pd.to_numeric(dFrame1["SwP"])
+#dFrame1["WVHT"] = cleanBuoyData(dFrame1["WVHT"], 'numeric')
+#dFrame1["SwP"] = cleanBuoyData(dFrame1["SwP"], 'numeric')
 
 # ---------------------- plot some stuff -------------------------------
 
 # wave height
-dFrame1.plot(x='Samples', y='WVHT', kind='line', marker='o')
+dFrame1.plot(x='Date', y='WVHT', kind='line', marker='o')
 plt.title('Wave height')
 plt.xlabel('Samples')
 plt.ylabel('Height [m]')
@@ -62,7 +80,7 @@ plt.grid(True)
 plt.show()
 
 # swell period
-dFrame1.plot(x='Samples', y='SwP', kind='line', marker='o')
+dFrame1.plot(x='Date', y='SwP', kind='line', marker='o')
 plt.title('Swell period')
 plt.xlabel('Samples')
 plt.ylabel('Period [s]')
