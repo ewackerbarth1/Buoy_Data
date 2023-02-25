@@ -1,0 +1,10 @@
+name: buoy-data-analysis 
+dependencies:
+  - python
+  - requests
+  - bs4
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib
+  - plotly
