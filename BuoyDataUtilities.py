@@ -102,7 +102,7 @@ def constructBuoyDict():
     buoySoup = BeautifulSoup(ndbcPage.content, 'xml') #<class 'bs4.BeautifulSoup'>
 
     # find buoy station types
-    buoyStations = buoySoup.find_all("station", {"type": "buoy"})
+    buoyStations = buoySoup.find_all("station") #, {"type": "buoy"})
     print('# of active buoys = ' + str(len(buoyStations))) # 347 active buoys as of 1/31/2021
 
     # build buoy dictionary with id as key and (lat, lon) as value
@@ -114,7 +114,6 @@ def constructBuoyDict():
         buoysDict[thisKey] = (float(thisLat), float(thisLon))
 
     return buoysDict
-
 
 def findNearbyBuoys(buoysDict, lat, lon, dLat, dLon):
     '''

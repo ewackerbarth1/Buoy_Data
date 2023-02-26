@@ -3,12 +3,109 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import argparse
 import re
 import warnings
 import time
 from datetime import date
-from BuoyDataUtilities import cleanBuoyData, buildSwellDirDict, makeCircularHist
+from BuoyDataUtilities import cleanBuoyData, buildSwellDirDict, makeCircularHist, constructBuoyDict
+
+def calcDistancesToActiveBuoys(currentLoc: tuple, activeBuoys: dict) -> list:
+    activeBuoyDistances = []
+    currentLat, currentLon = currentLoc
+    for stationId, latLon in activeBuoys.items():
+        thisDistance = calcDistances(currentLoc, latLon)
+        activeBuoyDistances.append((stationId, thisDistance))
+        print(f'station {stationId} is {thisDistance} nmi away')
+
+    return activeBuoyDistances
+
+def getActiveBuoysWithinThreshold(distanceThreshold: float, activeBuoyDistances: list) -> list:
+    nearbyBuoys = []
+    for stationId, distanceAway in activeBuoyDistances:
+        if distanceAway <= distanceThreshold:
+            nearbyBuoys.append((stationId, distanceAway))
+
+    return nearbyBuoys
+
+def convertDegreesToRadians(thetaDeg: float) -> float:
+    return thetaDeg * np.pi / 180
+
+def calcDistances(latLon1: tuple, latLon2: tuple) -> float:
+    lat1Rad, lon1Rad = convertDegreesToRadians(latLon1[0]), convertDegreesToRadians(latLon1[1])
+    lat2Rad, lon2Rad = convertDegreesToRadians(latLon2[0]), convertDegreesToRadians(latLon2[1])
+
+    dLat = lat2Rad - lat1Rad
+    dLon = lon2Rad - lon1Rad
+
+    a = np.sin(dLat / 2) * np.sin(dLat / 2) + np.cos(lat1Rad) * np.cos(lat2Rad) * np.sin(dLon / 2) * np.sin(dLon / 2)
+
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+
+    earthRadius = 6371e3   # meters
+    distMeters = earthRadius * c
+
+    metersPerNMi = 1852
+    distNMi = distMeters / metersPerNMi# nautical miles
+    return distNMi
+
+def initializeNearbyBuoyDF(currentLoc: tuple):
+    distanceThreshold = 500 # nautical miles
+    activeBuoys = constructBuoyDict()
+    activeBuoyDistances = calcDistancesToActiveBuoys(currentLoc, activeBuoys)
+    nearbyBuoys = getActiveBuoysWithinThreshold(distanceThreshold, activeBuoyDistances)
+    print(f'# of buoys within {distanceThreshold} nmi radius = {len(nearbyBuoys)}')
+
+    nearbyBuoyData = []
+    for stationID, distanceAway in nearbyBuoys:
+        stationLat, stationLon = activeBuoys[stationID]
+        thisBuoyData = [stationID, stationLat, stationLon, distanceAway]
+        nearbyBuoyData.append(thisBuoyData)
+
+    buoysDF = pd.DataFrame(nearbyBuoyData, columns=['ID', 'lat', 'lon', 'distanceAway'])
+    print('Buoys dataframe:')
+    print(buoysDF)
+
+    return buoysDF
+
+def mapBuoys(buoysDF, currentLoc):
+    fig = go.Figure(go.Scattergeo())
+    fig.update_geos(projection_type="natural earth",
+            showcoastlines = True,
+            showland = True,
+            showocean = True,
+            showlakes = True,
+            resolution = 50, 
+            center = dict(
+                lon = currentLoc[1], 
+                lat=currentLoc[0]
+                )
+            )
+
+    fig.add_trace(go.Scattergeo(lon = [currentLoc[1]], lat = [currentLoc[0]],
+        mode = 'markers',
+        name = 'Current Location',
+        marker = dict(
+            color = 'rgb(0, 0, 255)',
+            symbol = 'x'
+            )
+        ))
+
+    fig.add_trace(go.Scattergeo(
+        lon = buoysDF['lon'],
+        lat = buoysDF['lat'],
+        text = buoysDF['ID'],
+        mode = 'markers',
+        name = 'buoys',
+        marker = dict(
+            color = 'rgb(255, 0, 0)'
+            )
+        )
+        )
+
+    fig.update_layout(height=600, margin={"r":0,"t":0,"l":0,"b":0})
+    fig.show()
 
 class NDBCBuoy():
     def __init__(self, stationID):
@@ -259,17 +356,23 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-s", type=str, required=True, help="buoy station id")
     parser.add_argument("-N", type=int, required=True, help="# of years for historical data")
+    parser.add_argument("--lat", type=float, required=True, help="latitude in degrees")
+    parser.add_argument("--lon", type=float, required=True, help="longitude in degrees")
     args = parser.parse_args()
 
-    buoy1 = NDBCBuoy(args.s)
-    buoy1.buildRealtimeDataFrame()
-    buoy1.buildHistoricalDataFrame(args.N)
-    #buoy1.plotPastNDaysWvht(10)
-    buoy1.analyzeWVHTDistribution('realtime')
-    buoy1.analyzeWVHTDistribution('historical')
-    buoy1.plotWvhtDistribution()
-    #buoy1.plotWvhtAndPeriodJointDistribution()
-    #buoy1.plotSwellDirectionDistribution()
+    desiredLocation = (args.lat, args.lon)
+    buoysDF = initializeNearbyBuoyDF(desiredLocation)
+    mapBuoys(buoysDF, desiredLocation)
+
+    #buoy1 = NDBCBuoy(args.s)
+    #buoy1.buildRealtimeDataFrame()
+    #buoy1.buildHistoricalDataFrame(args.N)
+    ##buoy1.plotPastNDaysWvht(10)
+    #buoy1.analyzeWVHTDistribution('realtime')
+    #buoy1.analyzeWVHTDistribution('historical')
+    #buoy1.plotWvhtDistribution()
+    ##buoy1.plotWvhtAndPeriodJointDistribution()
+    ##buoy1.plotSwellDirectionDistribution()
 
 if __name__ == "__main__":
     main()
