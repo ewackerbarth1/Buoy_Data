@@ -3,8 +3,10 @@ dependencies:
   - python
   - requests
   - bs4
+  - lxml
   - numpy
   - scipy
   - pandas
   - matplotlib
   - plotly
+  - PyMySQL

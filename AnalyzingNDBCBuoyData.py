@@ -11,23 +11,6 @@ import time
 from datetime import date
 from BuoyDataUtilities import cleanBuoyData, buildSwellDirDict, makeCircularHist, constructBuoyDict
 
-def calcDistancesToActiveBuoys(currentLoc: tuple, activeBuoys: dict) -> list:
-    activeBuoyDistances = []
-    currentLat, currentLon = currentLoc
-    for stationId, latLon in activeBuoys.items():
-        thisDistance = calcDistances(currentLoc, latLon)
-        activeBuoyDistances.append((stationId, thisDistance))
-        print(f'station {stationId} is {thisDistance} nmi away')
-
-    return activeBuoyDistances
-
-def getActiveBuoysWithinThreshold(distanceThreshold: float, activeBuoyDistances: list) -> list:
-    nearbyBuoys = []
-    for stationId, distanceAway in activeBuoyDistances:
-        if distanceAway <= distanceThreshold:
-            nearbyBuoys.append((stationId, distanceAway))
-
-    return nearbyBuoys
 
 def convertDegreesToRadians(thetaDeg: float) -> float:
     return thetaDeg * np.pi / 180
@@ -50,62 +33,98 @@ def calcDistances(latLon1: tuple, latLon2: tuple) -> float:
     distNMi = distMeters / metersPerNMi# nautical miles
     return distNMi
 
-def initializeNearbyBuoyDF(currentLoc: tuple):
-    distanceThreshold = 500 # nautical miles
-    activeBuoys = constructBuoyDict()
-    activeBuoyDistances = calcDistancesToActiveBuoys(currentLoc, activeBuoys)
-    nearbyBuoys = getActiveBuoysWithinThreshold(distanceThreshold, activeBuoyDistances)
-    print(f'# of buoys within {distanceThreshold} nmi radius = {len(nearbyBuoys)}')
 
-    nearbyBuoyData = []
-    for stationID, distanceAway in nearbyBuoys:
-        stationLat, stationLon = activeBuoys[stationID]
-        thisBuoyData = [stationID, stationLat, stationLon, distanceAway]
-        nearbyBuoyData.append(thisBuoyData)
 
-    buoysDF = pd.DataFrame(nearbyBuoyData, columns=['ID', 'lat', 'lon', 'distanceAway'])
-    print('Buoys dataframe:')
-    print(buoysDF)
+class BuoySelector():
+    def __init__(self, currentLoc: tuple, boiFName: str):
+        self.currentLoc = currentLoc
+        self.boiFName = boiFName
 
-    return buoysDF
+        self.getActiveBuoys()
+        self.getBuoysOfInterest()
+        #self.activeBuoys
+        #self.activeBOI
 
-def mapBuoys(buoysDF, currentLoc):
-    fig = go.Figure(go.Scattergeo())
-    fig.update_geos(projection_type="natural earth",
-            showcoastlines = True,
-            showland = True,
-            showocean = True,
-            showlakes = True,
-            resolution = 50, 
-            center = dict(
-                lon = currentLoc[1], 
-                lat=currentLoc[0]
+    def parseBOIFile(self) -> list:
+        with open(self.boiFName) as f:
+            stationIDs = f.readlines()
+            boiList = [s.strip() for s in stationIDs]
+
+        print('buoys of interest:')
+        print(boiList)
+        return boiList
+
+    def getActiveBuoys(self):
+        self.activeBuoys = constructBuoyDict()
+
+    def getActiveBOI(self, attemptedBOI):
+        self.activeBOI = dict()
+        for boi in attemptedBOI:
+            if boi not in self.activeBuoys:
+                print(f'station {boi} either does not exist or is not active!')
+            else:
+                self.activeBOI[boi] = self.activeBuoys[boi]
+
+    def getBuoysOfInterest(self):
+        boiList = self.parseBOIFile()
+        self.getActiveBOI(boiList)
+
+    def initializeBOIDF(self):
+        #distanceThreshold = 500 # nautical miles
+        #activeBuoys = constructBuoyDict()
+        #boiDistances = calcDistancesToActiveBuoys(self.currentLoc, self.activeBOI)
+        #nearbyBuoys = getActiveBuoysWithinThreshold(distanceThreshold, activeBuoyDistances)
+        #print(f'# of buoys within {distanceThreshold} nmi radius = {len(nearbyBuoys)}')
+
+        boiData = []
+        for stationID, latLon in self.activeBOI.items():
+            distanceAway = calcDistances(self.currentLoc, latLon)
+            hoverText = f'{stationID}, {distanceAway:0.2f} NM away'
+            thisBuoyData = [stationID, latLon[0], latLon[1], distanceAway, hoverText]
+            boiData.append(thisBuoyData)
+
+        self.buoysDF = pd.DataFrame(boiData, columns=['ID', 'lat', 'lon', 'distanceAway', 'hoverText'])
+        print('Buoys dataframe:')
+        print(self.buoysDF)
+
+    def mapBuoys(self):
+        fig = go.Figure(go.Scattergeo())
+        fig.update_geos(projection_type="natural earth",
+                showcoastlines = True,
+                showland = True,
+                showocean = True,
+                showlakes = True,
+                resolution = 50, 
+                center = dict(
+                    lon = self.currentLoc[1], 
+                    lat = self.currentLoc[0]
+                    )
+                )
+
+        fig.add_trace(go.Scattergeo(lon = [self.currentLoc[1]], lat = [self.currentLoc[0]],
+            mode = 'markers',
+            name = 'Current Location',
+            marker = dict(
+                color = 'rgb(0, 0, 255)',
+                symbol = 'x'
+                )
+            ))
+
+        fig.add_trace(go.Scattergeo(
+            lon = self.buoysDF['lon'],
+            lat = self.buoysDF['lat'],
+            text = self.buoysDF['hoverText'],
+            mode = 'markers',
+            name = 'buoys',
+            marker = dict(
+                color = 'rgb(255, 0, 0)'
                 )
             )
-
-    fig.add_trace(go.Scattergeo(lon = [currentLoc[1]], lat = [currentLoc[0]],
-        mode = 'markers',
-        name = 'Current Location',
-        marker = dict(
-            color = 'rgb(0, 0, 255)',
-            symbol = 'x'
             )
-        ))
 
-    fig.add_trace(go.Scattergeo(
-        lon = buoysDF['lon'],
-        lat = buoysDF['lat'],
-        text = buoysDF['ID'],
-        mode = 'markers',
-        name = 'buoys',
-        marker = dict(
-            color = 'rgb(255, 0, 0)'
-            )
-        )
-        )
-
-    fig.update_layout(height=600, margin={"r":0,"t":0,"l":0,"b":0})
-    fig.show()
+        fig.update_layout(height=600, margin={"r":0,"t":0,"l":0,"b":0})
+        fig.show()
+    
 
 class NDBCBuoy():
     def __init__(self, stationID):
@@ -354,15 +373,21 @@ class NDBCBuoy():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-s", type=str, required=True, help="buoy station id")
-    parser.add_argument("-N", type=int, required=True, help="# of years for historical data")
+    #parser.add_argument("-s", type=str, required=True, help="buoy station id")
+    #parser.add_argument("-N", type=int, required=True, help="# of years for historical data")
     parser.add_argument("--lat", type=float, required=True, help="latitude in degrees")
     parser.add_argument("--lon", type=float, required=True, help="longitude in degrees")
+    parser.add_argument("--bf", type=str, required=True, help="text file name containing buoys of interest")
     args = parser.parse_args()
 
     desiredLocation = (args.lat, args.lon)
-    buoysDF = initializeNearbyBuoyDF(desiredLocation)
-    mapBuoys(buoysDF, desiredLocation)
+
+    myBuoySelector = BuoySelector(desiredLocation, args.bf)
+    myBuoySelector.initializeBOIDF()
+    myBuoySelector.mapBuoys()
+    
+    #buoysDF = initializeNearbyBuoyDF(desiredLocation)
+    #mapBuoys(buoysDF, desiredLocation)
 
     #buoy1 = NDBCBuoy(args.s)
     #buoy1.buildRealtimeDataFrame()
