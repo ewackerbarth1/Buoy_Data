@@ -10,7 +10,12 @@ import warnings
 import time
 from datetime import date
 from BuoyDataUtilities import cleanBuoyData, buildSwellDirDict, makeCircularHist, constructBuoyDict
+import config
+import pymysql
 
+def formatPandasDateTimeForMySQL(pdDateTime):
+    mySQLDateTime = pdDateTime.strftime('%Y-%m-%d %H:%M:%S')
+    return mySQLDateTime
 
 def convertDegreesToRadians(thetaDeg: float) -> float:
     return thetaDeg * np.pi / 180
@@ -34,16 +39,18 @@ def calcDistances(latLon1: tuple, latLon2: tuple) -> float:
     return distNMi
 
 
-
 class BuoySelector():
     def __init__(self, currentLoc: tuple, boiFName: str):
         self.currentLoc = currentLoc
         self.boiFName = boiFName
 
-        self.getActiveBuoys()
-        self.getBuoysOfInterest()
+        #self.getActiveBuoys()
+        #self.getBuoysOfInterest()
         #self.activeBuoys
         #self.activeBOI
+
+    def getActiveBuoys(self):
+        self.activeBuoys = constructBuoyDict()
 
     def parseBOIFile(self) -> list:
         with open(self.boiFName) as f:
@@ -53,9 +60,6 @@ class BuoySelector():
         print('buoys of interest:')
         print(boiList)
         return boiList
-
-    def getActiveBuoys(self):
-        self.activeBuoys = constructBuoyDict()
 
     def getActiveBOI(self, attemptedBOI):
         self.activeBOI = dict()
@@ -70,11 +74,6 @@ class BuoySelector():
         self.getActiveBOI(boiList)
 
     def initializeBOIDF(self):
-        #distanceThreshold = 500 # nautical miles
-        #activeBuoys = constructBuoyDict()
-        #boiDistances = calcDistancesToActiveBuoys(self.currentLoc, self.activeBOI)
-        #nearbyBuoys = getActiveBuoysWithinThreshold(distanceThreshold, activeBuoyDistances)
-        #print(f'# of buoys within {distanceThreshold} nmi radius = {len(nearbyBuoys)}')
 
         boiData = []
         for stationID, latLon in self.activeBOI.items():
@@ -371,6 +370,142 @@ class NDBCBuoy():
         print()
         return []
 
+class DatabaseInteractor():
+    #TODO: the config is just for the database so maybe find a way to localize the import instead of a global one at the top of this file
+    def __init__(self):
+        self.establishConnection()
+        #self.successfulConnection
+
+    def establishConnection(self):
+        try:
+            self.connection = pymysql.connect(host=config.ENDPOINT,
+                    port=config.PORT,
+                    user=config.USERNAME,
+                    password=config.PASSWORD,
+                    database=config.DBNAME,
+                    cursorclass=pymysql.cursors.Cursor,
+                    ssl_ca=config.SSL_CA
+                    )
+
+            print('Successful RDS connection!')
+            self.successfulConnection = True
+
+        except Exception as e:
+            print(f'RDS connection failed: {e}')
+            self.connection = None
+            self.successfulConnection = False
+
+    def checkForBuoyExistenceInDB(self, stationID: str) -> bool:
+        # TODO: The count is either going to be 1 or 0, so there is definitely a more precise SQL command
+        # query stations table for stationID entry
+        thisCursor = self.connection.cursor()
+        thisCursor.execute('SELECT COUNT(*) FROM stations where id = %s', (stationID,))
+
+        idCount = thisCursor.fetchone()[0]
+        thisCursor.close()
+
+        if idCount > 0:
+            return True
+        else:
+            return False
+
+    def addBuoyToStationsTable(self, stationID: str, stationLatLon: tuple):
+        thisCursor = self.connection.cursor()
+        thisCursor.execute('INSERT INTO stations (id, location) VALUES (%s, POINT(%s, %s))', (stationID, stationLatLon[0], stationLatLon[1]))
+        thisCursor.close()
+        self.connection.commit()
+
+    def getAllDataFromStationsTable(self):
+        thisCursor = self.connection.cursor()
+        thisCursor.execute('SELECT id, ST_X(location) as latitude, ST_Y(location) as longitude FROM stations')
+        allRows = thisCursor.fetchall()
+        thisCursor.close()
+        return allRows
+
+    def printContentsOfStationsTable(self):
+        allRows = self.getAllDataFromStationsTable()
+        print(f'stations table = {allRows}')
+
+    def removeRealtimeSamplesForStation(self, stationID):
+        thisCursor = self.connection.cursor()
+        thisCursor.execute('DELETE FROM realtime_data WHERE station_id = %s', (stationID,))
+        thisCursor.close()
+
+    def addRealtimeSamplesForStation(self, stationID, buoyRealtimeDataframe):
+        thisCursor = self.connection.cursor()
+        for iRow in range(len(buoyRealtimeDataframe)):
+            wvht = buoyRealtimeDataframe.iloc[iRow]['WVHT']
+            swp = buoyRealtimeDataframe.iloc[iRow]['SwP']
+            swdir = buoyRealtimeDataframe.iloc[iRow]['SwD']
+            dateTime = formatPandasDateTimeForMySQL(buoyRealtimeDataframe.iloc[iRow]['Date'])
+            thisCursor.execute('INSERT INTO realtime_data (station_id, timestamp, wvht, swp, swdir) VALUES (%s, %s, %s, %s, %s)', (stationID, dateTime, wvht, swp, swdir))
+
+        thisCursor.close()
+
+    def updateRealtimeDataEntry(self, stationID, buoyRTDF):
+        print(f'Removing realtime data for station {stationID}')
+        startTime = time.time()
+        self.removeRealtimeSamplesForStation(stationID)
+        print(f'Removing realtime data took {time.time() - startTime} s')
+
+        print(f'Adding realtime data for station {stationID}')
+        startTime = time.time()
+        self.addRealtimeSamplesForStation(stationID, buoyRTDF)
+        print(f'Adding realtime data took {time.time() - startTime} s')
+
+        self.connection.commit()
+        print(f'Updated realtime data for station {stationID}')
+
+    def closeConnection(self):
+        self.connection.close()
+
+def updateRealtimeData(args):
+    # need a list of buoys
+    desiredLocation = (args.lat, args.lon)
+    myBuoySelector = BuoySelector(desiredLocation, args.bf)
+    boiList = myBuoySelector.parseBOIFile()
+
+    dbInteractor = DatabaseInteractor() 
+    if not dbInteractor.successfulConnection:
+        print('Could not update data because of unsuccessful connection')
+        return
+
+    for stationID in boiList:
+        # check if buoy is in stations table
+        buoyInTable = dbInteractor.checkForBuoyExistenceInDB(stationID)
+        if not buoyInTable:
+            print(f'station {stationID} is not in the database, so please add it before attempting to update its data!')
+            continue
+
+        # if it is, then get realtime data set for it 
+        thisBuoy = NDBCBuoy(stationID)
+        thisBuoy.buildRealtimeDataFrame()
+
+        # add realtime data set to realtime_data table
+        dbInteractor.updateRealtimeDataEntry(stationID, thisBuoy.dataFrameRealtime)
+
+    dbInteractor.closeConnection()
+
+def addDesiredBuoysToDB(args):
+    desiredLocation = (args.lat, args.lon)
+    myBuoySelector = BuoySelector(desiredLocation, args.bf)
+
+    dbInteractor = DatabaseInteractor() 
+    if not dbInteractor.successfulConnection:
+        print('Could not add buoys because of unsuccessful connection')
+        return
+
+    for stationID, latLon in myBuoySelector.activeBOI.items():
+        buoyInTable = dbInteractor.checkForBuoyExistenceInDB(stationID)
+        if buoyInTable:
+            print(f'station {stationID} is already in the database!')
+        else:
+            print(f'adding station {stationID} to database...')
+            dbInteractor.addBuoyToStationsTable(stationID, latLon)
+
+    dbInteractor.printContentsOfStationsTable()
+    dbInteractor.closeConnection()
+
 def main():
     parser = argparse.ArgumentParser()
     #parser.add_argument("-s", type=str, required=True, help="buoy station id")
@@ -378,13 +513,26 @@ def main():
     parser.add_argument("--lat", type=float, required=True, help="latitude in degrees")
     parser.add_argument("--lon", type=float, required=True, help="longitude in degrees")
     parser.add_argument("--bf", type=str, required=True, help="text file name containing buoys of interest")
+    #parser.add_argument("--action", type=str, required=True, help="update-realtime, update-historical, or display-data")
     args = parser.parse_args()
 
-    desiredLocation = (args.lat, args.lon)
+    updateRealtimeData(args)
+    #addDesiredBuoysToDB(args)
+    #desiredLocation = (args.lat, args.lon)
 
-    myBuoySelector = BuoySelector(desiredLocation, args.bf)
-    myBuoySelector.initializeBOIDF()
-    myBuoySelector.mapBuoys()
+    #if args.action == 'update-realtime':
+    #    updateRealtimeData(args)
+    #elif args.action == 'update-historical':
+    #    asdf
+    #elif args.action == 'display-data':
+
+    #else:
+    #    ValueError('Invalid input for action argument! Valid inputs are: update-realtime, update-historical, display-data')
+
+
+    #myBuoySelector = BuoySelector(desiredLocation, args.bf)
+    #myBuoySelector.initializeBOIDF()
+    #myBuoySelector.mapBuoys()
     
     #buoysDF = initializeNearbyBuoyDF(desiredLocation)
     #mapBuoys(buoysDF, desiredLocation)

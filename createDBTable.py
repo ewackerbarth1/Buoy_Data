@@ -2,6 +2,7 @@ import pymysql
 import config
 
 def startRDSConnection():
+    # TODO: why am I using a DictCursor instead of a Cursor?
     try:
         connection = pymysql.connect(host=config.ENDPOINT,
                 port=config.PORT,
