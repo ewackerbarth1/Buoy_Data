@@ -21,11 +21,26 @@ def startRDSConnection():
 
     return connection
 
-def main():
-    connection = startRDSConnection()
-    if not connection:
-        return
-    
+def checkIfTableExists(connection, tableName) -> bool:
+    cursor = connection.cursor()
+    cursor.execute("SHOW TABLES LIKE %s", (tableName,))
+    nTablesLikeThis = cursor.rowcount
+    cursor.close()
+
+    if nTablesLikeThis > 0:
+        return True
+    else:
+        return False
+
+def createRealtimeDataTable(connection):
+    connection.cursor().execute('''
+        CREATE TABLE realtime_data_v2 (
+            station_id VARCHAR(255),
+            data MEDIUMTEXT
+        )
+    ''')
+
+def createTables(connection):
     connection.cursor().execute('''
         CREATE TABLE stations (
             id VARCHAR(255),
@@ -53,7 +68,20 @@ def main():
         )
     ''')
 
-    connection.commit()
+
+def main():
+    connection = startRDSConnection()
+    if not connection:
+        return
+
+
+    realtimeV2Check = checkIfTableExists(connection, 'realtime_data_v2')
+    if realtimeV2Check:
+        print('realtime_data_v2 already exists!')
+    else:
+        createRealtimeDataTable(connection)
+        connection.commit()
+
     connection.close()
 
 if __name__ == "__main__":

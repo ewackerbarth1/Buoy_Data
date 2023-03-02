@@ -12,10 +12,14 @@ from datetime import date
 from BuoyDataUtilities import cleanBuoyData, buildSwellDirDict, makeCircularHist, constructBuoyDict
 import config
 import pymysql
+import sys
 
 def formatPandasDateTimeForMySQL(pdDateTime):
     mySQLDateTime = pdDateTime.strftime('%Y-%m-%d %H:%M:%S')
     return mySQLDateTime
+
+def convertDFToJSONStr(df):
+    return df.to_json(orient='records')
 
 def convertDegreesToRadians(thetaDeg: float) -> float:
     return thetaDeg * np.pi / 180
@@ -442,17 +446,32 @@ class DatabaseInteractor():
 
         thisCursor.close()
 
+    def addRealtimeSamplesForStationV2(self, stationID, buoyRealtimeDataframe):
+        thisCursor = self.connection.cursor()
+
+        print(f'buoyDF = {buoyRealtimeDataframe}')
+        # convert data frame to JSON string
+        dfJSONStr = convertDFToJSONStr(buoyRealtimeDataframe)
+        print(f'Size of json string = {sys.getsizeof(dfJSONStr)}')
+
+        # write station id and JSON string to v2 table
+        sqlCmd = 'INSERT INTO realtime_data_v2 (station_id, data) VALUES (%s, %s)'
+        thisCursor.execute(sqlCmd, (stationID, dfJSONStr))
+
+        thisCursor.close()
+
     def updateRealtimeDataEntry(self, stationID, buoyRTDF):
         print(f'Removing realtime data for station {stationID}')
         startTime = time.time()
-        self.removeRealtimeSamplesForStation(stationID)
+        #self.removeRealtimeSamplesForStation(stationID)
         print(f'Removing realtime data took {time.time() - startTime} s')
 
         print(f'Adding realtime data for station {stationID}')
         startTime = time.time()
-        self.addRealtimeSamplesForStation(stationID, buoyRTDF)
+        #self.addRealtimeSamplesForStation(stationID, buoyRTDF)
+        self.addRealtimeSamplesForStationV2(stationID, buoyRTDF)
         print(f'Adding realtime data took {time.time() - startTime} s')
-
+        
         self.connection.commit()
         print(f'Updated realtime data for station {stationID}')
 
