@@ -19,7 +19,10 @@ def formatPandasDateTimeForMySQL(pdDateTime):
     return mySQLDateTime
 
 def convertDFToJSONStr(df):
-    return df.to_json(orient='records')
+    return df.to_json(date_format='iso', orient='records')
+
+def convertJSONStrToDF(jsonStr):
+    return pd.read_json(jsonStr, convert_dates=['Date'])
 
 def convertDegreesToRadians(thetaDeg: float) -> float:
     return thetaDeg * np.pi / 180
@@ -437,17 +440,6 @@ class DatabaseInteractor():
 
     def addRealtimeSamplesForStation(self, stationID, buoyRealtimeDataframe):
         thisCursor = self.connection.cursor()
-        for iRow in range(len(buoyRealtimeDataframe)):
-            wvht = buoyRealtimeDataframe.iloc[iRow]['WVHT']
-            swp = buoyRealtimeDataframe.iloc[iRow]['SwP']
-            swdir = buoyRealtimeDataframe.iloc[iRow]['SwD']
-            dateTime = formatPandasDateTimeForMySQL(buoyRealtimeDataframe.iloc[iRow]['Date'])
-            thisCursor.execute('INSERT INTO realtime_data (station_id, timestamp, wvht, swp, swdir) VALUES (%s, %s, %s, %s, %s)', (stationID, dateTime, wvht, swp, swdir))
-
-        thisCursor.close()
-
-    def addRealtimeSamplesForStationV2(self, stationID, buoyRealtimeDataframe):
-        thisCursor = self.connection.cursor()
 
         print(f'buoyDF = {buoyRealtimeDataframe}')
         # convert data frame to JSON string
@@ -455,7 +447,7 @@ class DatabaseInteractor():
         print(f'Size of json string = {sys.getsizeof(dfJSONStr)}')
 
         # write station id and JSON string to v2 table
-        sqlCmd = 'INSERT INTO realtime_data_v2 (station_id, data) VALUES (%s, %s)'
+        sqlCmd = 'INSERT INTO realtime_data (station_id, data) VALUES (%s, %s)'
         thisCursor.execute(sqlCmd, (stationID, dfJSONStr))
 
         thisCursor.close()
@@ -463,13 +455,12 @@ class DatabaseInteractor():
     def updateRealtimeDataEntry(self, stationID, buoyRTDF):
         print(f'Removing realtime data for station {stationID}')
         startTime = time.time()
-        #self.removeRealtimeSamplesForStation(stationID)
+        self.removeRealtimeSamplesForStation(stationID)
         print(f'Removing realtime data took {time.time() - startTime} s')
 
         print(f'Adding realtime data for station {stationID}')
         startTime = time.time()
-        #self.addRealtimeSamplesForStation(stationID, buoyRTDF)
-        self.addRealtimeSamplesForStationV2(stationID, buoyRTDF)
+        self.addRealtimeSamplesForStation(stationID, buoyRTDF)
         print(f'Adding realtime data took {time.time() - startTime} s')
         
         self.connection.commit()

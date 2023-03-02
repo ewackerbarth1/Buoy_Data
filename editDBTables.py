@@ -34,13 +34,28 @@ def checkIfTableExists(connection, tableName) -> bool:
 
 def createRealtimeDataTable(connection):
     connection.cursor().execute('''
-        CREATE TABLE realtime_data_v2 (
+        CREATE TABLE realtime_data (
             station_id VARCHAR(255),
             data MEDIUMTEXT
         )
     ''')
 
-def createTables(connection):
+def deleteRealtimeDataTable(connection):
+    connection.cursor().execute('DROP TABLE realtime_data')
+
+
+def createHistoricalDataTable(connection):
+    connection.cursor().execute('''
+        CREATE TABLE historical_data (
+            station_id VARCHAR(255),
+            data MEDIUMTEXT
+        )
+    ''')
+
+def deleteHistoricalDataTable(connection):
+    connection.cursor().execute('DROP TABLE historical_data')
+
+def createStationsTable(connection):
     connection.cursor().execute('''
         CREATE TABLE stations (
             id VARCHAR(255),
@@ -48,40 +63,12 @@ def createTables(connection):
         )
     ''')
 
-    connection.cursor().execute('''
-        CREATE TABLE realtime_data (
-            station_id VARCHAR(255),
-            timestamp DATETIME,
-            wvht FLOAT,
-            swp FLOAT,
-            swdir FLOAT
-        )
-    ''')
-
-    connection.cursor().execute('''
-        CREATE TABLE historical_data (
-            station_id VARCHAR(255),
-            timestamp DATETIME,
-            wvht FLOAT,
-            swp FLOAT,
-            swdir FLOAT
-        )
-    ''')
-
-
 def main():
     connection = startRDSConnection()
     if not connection:
         return
 
-
-    realtimeV2Check = checkIfTableExists(connection, 'realtime_data_v2')
-    if realtimeV2Check:
-        print('realtime_data_v2 already exists!')
-    else:
-        createRealtimeDataTable(connection)
-        connection.commit()
-
+    #connection.commit()
     connection.close()
 
 if __name__ == "__main__":
