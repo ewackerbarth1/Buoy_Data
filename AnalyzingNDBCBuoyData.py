@@ -22,10 +22,14 @@ def convertDFToJSONStr(df):
     return df.to_json(date_format='iso', orient='records')
 
 def convertJSONStrToDF(jsonStr):
-    return pd.read_json(jsonStr, convert_dates=['Date'])
+    return pd.read_json(jsonStr, orient='records', convert_dates=['Date'])
 
 def convertDegreesToRadians(thetaDeg: float) -> float:
     return thetaDeg * np.pi / 180
+
+def convertMetersToNM(d: float) -> float:
+    metersPerNM = 1852
+    return d / metersPerNM
 
 def calcDistances(latLon1: tuple, latLon2: tuple) -> float:
     lat1Rad, lon1Rad = convertDegreesToRadians(latLon1[0]), convertDegreesToRadians(latLon1[1])
@@ -41,10 +45,15 @@ def calcDistances(latLon1: tuple, latLon2: tuple) -> float:
     earthRadius = 6371e3   # meters
     distMeters = earthRadius * c
 
-    metersPerNMi = 1852
-    distNMi = distMeters / metersPerNMi# nautical miles
-    return distNMi
+    #metersPerNMi = 1852
+    #distNMi = distMeters / metersPerNMi# nautical miles
+    distNM = convertMetersToNM(distMeters)
+    return distNM
 
+def convertSwellETAToDistance(swPSeconds: float, etaHours: float) -> float:
+    swellSpeedNMPerHour = 1.5 * swPSeconds  # NM / hour
+    distanceAway = swellSpeedNMPerHour * etaHours # NM
+    return distanceAway
 
 class BuoySelector():
     def __init__(self, currentLoc: tuple, boiFName: str):
@@ -80,18 +89,43 @@ class BuoySelector():
         boiList = self.parseBOIFile()
         self.getActiveBOI(boiList)
 
-    def initializeBOIDF(self):
-
+    def buildBOIDF(self):
+        boiList = self.parseBOIFile()
         boiData = []
-        for stationID, latLon in self.activeBOI.items():
-            distanceAway = calcDistances(self.currentLoc, latLon)
-            hoverText = f'{stationID}, {distanceAway:0.2f} NM away'
-            thisBuoyData = [stationID, latLon[0], latLon[1], distanceAway, hoverText]
-            boiData.append(thisBuoyData)
+        for stationID in boiList:
+            print(f'Instantiating NDBCBuoy {stationID}...')
+            thisBuoy = NDBCBuoy(stationID)
+            thisBuoy.fetchDataFromDB()
+            thisBuoy.buildAnalysisProducts()
 
-        self.buoysDF = pd.DataFrame(boiData, columns=['ID', 'lat', 'lon', 'distanceAway', 'hoverText'])
+            buoyLatLon = (thisBuoy.lat, thisBuoy.lon)
+            distanceAway = calcDistances(self.currentLoc, buoyLatLon)
+            buoyInfo = [stationID, buoyLatLon[0], buoyLatLon[1], distanceAway]
+            buoyReadings = [thisBuoy.recentWVHT, thisBuoy.recentSwP, thisBuoy.recentSwD, thisBuoy.wvhtPercentileRealtime, thisBuoy.wvhtPercentileHistorical]
+
+            thisBuoyData = buoyInfo + buoyReadings
+
+            hoverText = f'{stationID}, {distanceAway:0.2f} NM away'
+            thisBuoyData.append(hoverText)
+            boiData.append(thisBuoyData)
+            
+
+        self.buoysDF = pd.DataFrame(boiData, columns=['ID', 'lat', 'lon', 'distanceAway', 'wvht', 'swp', 'swd', 'wvhtPercentileRealtime', 'wvhtPercentileHistorical', 'hoverText'])
         print('Buoys dataframe:')
         print(self.buoysDF)
+
+    def generateConstantDistancePoints(self, bearings, distanceAwayNM, lat1Deg, lon1Deg):
+        earthRadius = 6371e3   # meters
+
+        lat1, lon1 = convertDegreesToRadians(lat1Deg), convertDegreesToRadians(lon1Deg)
+        d = distanceAwayNM / convertMetersToNM(earthRadius)
+
+        lats = np.arcsin(np.sin(lat1) * np.cos(d) + np.cos(lat1) * np.sin(d) * np.cos(bearings))
+        lons = lon1 + np.arctan2(np.sin(bearings) * np.sin(d) * np.cos(lat1), np.cos(d) - np.sin(lat1) * np.sin(lats))
+
+        lats *= 180 / np.pi
+        lons *= 180 / np.pi
+        return lats, lons
 
     def mapBuoys(self):
         fig = go.Figure(go.Scattergeo())
@@ -116,6 +150,27 @@ class BuoySelector():
                 )
             ))
 
+        # generate range circles
+        nSamplesPerCircle = 100
+        hoursAway = [1, 4, 12, 24, 48]
+        prototypeSwellPeriodInSeconds = 15  
+        bearings = np.linspace(0, 2*np.pi, nSamplesPerCircle)
+        for swellEta in hoursAway:
+            distanceAwayNM = convertSwellETAToDistance(prototypeSwellPeriodInSeconds, swellEta)
+            lats, lons = self.generateConstantDistancePoints(bearings, distanceAwayNM, self.currentLoc[0], self.currentLoc[1])
+
+            fig.add_trace(go.Scattergeo(
+                lon = lons,
+                lat = lats,
+                text = self.buoysDF['hoverText'],
+                mode = 'lines',
+                name = f'+{swellEta} hrs',
+                marker = dict(
+                    color = 'rgb(0, 0, 0)'
+                    )
+                )
+                )
+
         fig.add_trace(go.Scattergeo(
             lon = self.buoysDF['lon'],
             lat = self.buoysDF['lat'],
@@ -138,6 +193,7 @@ class NDBCBuoy():
         self.baseURLRealtime = 'https://www.ndbc.noaa.gov/data/realtime2/'
         self.swellDict = buildSwellDirDict()
         self.buildStationURLs()
+        self.nYearsBack = 5   # number of years to go back for historical analysis
         #self.baseURLHistorical = 
         #self.urlRealtime
         #self.urlHistorical
@@ -146,6 +202,11 @@ class NDBCBuoy():
         #self.lat
         #self.lon
         #self.nSampsPerHour
+        #self.recentWVHT
+        #self.recentSwP
+        #self.recentSwD
+        #self.wvhtPercentileHistorical
+        #self.wvhtPercentileRealtime
 
     def buildStationURLs(self):
         self.urlRealtime = f'{self.baseURLRealtime}{self.stationID}.spec'
@@ -197,8 +258,9 @@ class NDBCBuoy():
         buoyDF['Date'] = pd.to_datetime(buoyDF['Date'], format='%Y%m%d%H%M')
 
         # drop unncessary columns
-        to_drop = ['#YY', 'MM', 'DD', 'hh', 'mm', 'STEEPNESS', 'SwH', 'WWH', 'WWP', 'WWD', 'APD', 'MWD']
-        buoyDF.drop(to_drop, inplace=True, axis=1)
+        #to_drop = ['#YY', 'MM', 'DD', 'hh', 'mm', 'STEEPNESS', 'SwH', 'WWH', 'WWP', 'WWD', 'APD', 'MWD']
+        #buoyDF.drop(to_drop, inplace=True, axis=1)
+        buoyDF = buoyDF.loc[:, ['Date', 'WVHT', 'SwP', 'SwD']]
     
         # clean data
         buoyDF = buoyDF.applymap(cleanBuoyData)
@@ -271,12 +333,19 @@ class NDBCBuoy():
         return buoyDF
 
     def cleanHistoricalDataFrame(self, buoyDF):
+        # build date column
+        buoyDF['Date'] = buoyDF['#YY'] + buoyDF['MM'] + buoyDF['DD'] + buoyDF['hh'] + buoyDF['mm']# add a date column
+        buoyDF['Date'] = pd.to_datetime(buoyDF['Date'], format='%Y%m%d%H%M')
+
+        # drop unneccessary columns and convert data types
+        buoyDF = buoyDF.loc[:, ['Date', 'WVHT', 'DPD', 'MWD']]
         buoyDF["WVHT"] = pd.to_numeric(buoyDF["WVHT"])
+        buoyDF["DPD"] = pd.to_numeric(buoyDF["DPD"])
+        buoyDF["MWD"] = pd.to_numeric(buoyDF["MWD"])
         return buoyDF
 
-
-    def buildHistoricalDataFrame(self, nYears: int):
-        yearsToCheck, monthsToCheck = self.getHistoricalYearsAndMonths(nYears)
+    def buildHistoricalDataFrame(self):
+        yearsToCheck, monthsToCheck = self.getHistoricalYearsAndMonths(self.nYearsBack)
         print(f'Grabbing historical data from years of {yearsToCheck} and months {monthsToCheck}')
         print(f'To limit requests to NDBC webpage, collecting {len(yearsToCheck)} years of historical data will take us about {len(yearsToCheck)*5}s')
         historicalDataFrames = []
@@ -288,6 +357,30 @@ class NDBCBuoy():
             historicalDataFrames.append(thisDataFrame)
 
         self.dataFrameHistorical = pd.concat(historicalDataFrames)
+
+    def setBuoyLocationFromDB(self, dBInteractor):
+        print(f'Setting buoy location for station {self.stationID}')
+        self.lat, self.lon = dBInteractor.getStationLocation(self.stationID)
+        print(f'station {self.stationID} at ({self.lat, self.lon})')
+
+    def setRealtimeDFFromDB(self, dBInteractor):
+        print(f'Setting realtime dataframe for station {self.stationID}')
+        self.dataFrameRealtime = dBInteractor.getRealtimeData(self.stationID)
+
+    def setHistoricalDFFromDB(self, dBInteractor):
+        self.dataFrameHistorical = dBInteractor.getHistoricalData(self.stationID)
+
+    def fetchDataFromDB(self):
+        dBInteractor = DatabaseInteractor()
+
+        self.setBuoyLocationFromDB(dBInteractor)
+        self.setRealtimeDFFromDB(dBInteractor)
+        self.setHistoricalDFFromDB(dBInteractor)
+
+        dBInteractor.closeConnection()
+
+    def pushDataToDB(self):
+        return
 
     def analyzeWVHTDistribution(self, dataSetName):
         nSamplesToAvg = 3   # most recent n samples to check
@@ -312,6 +405,39 @@ class NDBCBuoy():
 
         greaterThanFrac = ptr / nTotalValues 
         print(f'current swell is greater than {greaterThanFrac * 100 :0.2f}% of {dataSetName} data')
+
+    def setRecentReadings(self):
+        self.recentWVHT = self.dataFrameRealtime['WVHT'].iloc[0]
+        self.recentSwP = self.dataFrameRealtime['SwP'].iloc[0]
+        self.recentSwD = self.dataFrameRealtime['SwD'].iloc[0]
+
+    def calcWVHTPercentile(self, dataSetName: str) -> float:
+        if dataSetName == 'historical':
+            waveheightsSorted = self.dataFrameHistorical['WVHT'].sort_values().to_numpy() # ascending
+        elif dataSetName == 'realtime':
+            waveheightsSorted = self.dataFrameRealtime['WVHT'][1:].sort_values().to_numpy() # ascending
+        else:
+            raise ValueError('historical and realtime are the only supported data sets')
+
+        nTotalValues = len(waveheightsSorted)
+        ptr = 0
+        while ptr < nTotalValues and self.recentWVHT > waveheightsSorted[ptr]:
+            ptr += 1
+
+        wvhtPercentile = ptr / nTotalValues * 100
+        print(f'current swell is greater than {wvhtPercentile :0.1f}% of {dataSetName} data, ({nTotalValues} samples)')
+        return wvhtPercentile
+
+    def setWVHTPercentileHistorical(self):
+        self.wvhtPercentileHistorical = self.calcWVHTPercentile('historical')
+
+    def setWVHTPercentileRealtime(self):
+        self.wvhtPercentileRealtime = self.calcWVHTPercentile('realtime')
+
+    def buildAnalysisProducts(self):
+        self.setRecentReadings()
+        self.setWVHTPercentileHistorical()
+        self.setWVHTPercentileRealtime()
 
     def plotPastNDaysWvht(self, nDays: int):
         if nDays > 45:
@@ -466,8 +592,72 @@ class DatabaseInteractor():
         self.connection.commit()
         print(f'Updated realtime data for station {stationID}')
 
+    def removeHistoricalSamplesForStation(self, stationID):
+        thisCursor = self.connection.cursor()
+        thisCursor.execute('DELETE FROM historical_data WHERE station_id = %s', (stationID,))
+        thisCursor.close()
+
+    def addHistoricalSamplesForStation(self, stationID, buoyDF):
+        thisCursor = self.connection.cursor()
+
+        print(f'buoyDF = {buoyDF}')
+        # convert data frame to JSON string
+        dfJSONStr = convertDFToJSONStr(buoyDF)
+        print(f'Size of json string = {sys.getsizeof(dfJSONStr)}')
+
+        # write station id and JSON string to v2 table
+        sqlCmd = 'INSERT INTO historical_data (station_id, data) VALUES (%s, %s)'
+        thisCursor.execute(sqlCmd, (stationID, dfJSONStr))
+
+        thisCursor.close()
+
+    def updateHistoricalDataEntry(self, stationID, buoyDF):
+        print(f'Removing historical data for station {stationID}')
+        startTime = time.time()
+        self.removeHistoricalSamplesForStation(stationID)
+        print(f'Removing historical data took {time.time() - startTime} s')
+
+        print(f'Adding historical data for station {stationID}')
+        startTime = time.time()
+        self.addHistoricalSamplesForStation(stationID, buoyDF)
+        print(f'Adding historical data took {time.time() - startTime} s')
+        
+        self.connection.commit()
+        print(f'Updated historical data for station {stationID}')
+
+    def getStationLocation(self, stationID: str) -> tuple[float]:
+        thisCursor = self.connection.cursor()
+        sqlCmd = 'SELECT ST_X(location) as latitude, ST_Y(location) as longitude FROM stations WHERE id = %s'
+        thisCursor.execute(sqlCmd, (stationID,))
+        stationLoc = thisCursor.fetchone()
+        thisCursor.close()
+        return stationLoc
+
+    def getRealtimeData(self, stationID):
+        thisCursor = self.connection.cursor()
+        sqlCmd = 'SELECT data FROM realtime_data WHERE station_id = %s'
+        thisCursor.execute(sqlCmd, (stationID,))
+        realtimeJSONStr = thisCursor.fetchone()[0]
+        thisCursor.close()
+
+        #print(f'realtime data JSON str for station {stationID}:')
+        #print(realtimeJSONStr)
+        realtimeDF = convertJSONStrToDF(realtimeJSONStr)
+        return realtimeDF
+
+    def getHistoricalData(self, stationID):
+        thisCursor = self.connection.cursor()
+        sqlCmd = 'SELECT data FROM historical_data WHERE station_id = %s'
+        thisCursor.execute(sqlCmd, (stationID,))
+        historicalJSONStr = thisCursor.fetchone()[0]
+        thisCursor.close()
+
+        historicalDF = convertJSONStrToDF(historicalJSONStr)
+        return historicalDF
+
     def closeConnection(self):
         self.connection.close()
+
 
 def updateRealtimeData(args):
     # need a list of buoys
@@ -496,6 +686,33 @@ def updateRealtimeData(args):
 
     dbInteractor.closeConnection()
 
+def updateHistoricalData(args):
+    # need a list of buoys
+    desiredLocation = (args.lat, args.lon)
+    myBuoySelector = BuoySelector(desiredLocation, args.bf)
+    boiList = myBuoySelector.parseBOIFile()
+
+    dbInteractor = DatabaseInteractor() 
+    if not dbInteractor.successfulConnection:
+        print('Could not update data because of unsuccessful connection')
+        return
+
+    for stationID in boiList:
+        # check if buoy is in stations table
+        buoyInTable = dbInteractor.checkForBuoyExistenceInDB(stationID)
+        if not buoyInTable:
+            print(f'station {stationID} is not in the database, so please add it before attempting to update its data!')
+            continue
+
+        # if it is, then get realtime data set for it 
+        thisBuoy = NDBCBuoy(stationID)
+        thisBuoy.buildHistoricalDataFrame()
+
+        # add realtime data set to realtime_data table
+        dbInteractor.updateHistoricalDataEntry(stationID, thisBuoy.dataFrameHistorical)
+
+    dbInteractor.closeConnection()
+
 def addDesiredBuoysToDB(args):
     desiredLocation = (args.lat, args.lon)
     myBuoySelector = BuoySelector(desiredLocation, args.bf)
@@ -516,6 +733,28 @@ def addDesiredBuoysToDB(args):
     dbInteractor.printContentsOfStationsTable()
     dbInteractor.closeConnection()
 
+def getBuoyLocations(args):
+    desiredLocation = (args.lat, args.lon)
+    myBuoySelector = BuoySelector(desiredLocation, args.bf)
+    boiList = myBuoySelector.parseBOIFile()
+
+    dbInteractor = DatabaseInteractor() 
+    if not dbInteractor.successfulConnection:
+        print('Could not complete data base action because of unsuccessful connection')
+        return
+
+    for stationID in boiList:
+        stationLoc = dbInteractor.getStationLocation(stationID)
+        print(f'station {stationID} is located at {stationLoc}')
+
+    dbInteractor.closeConnection()
+
+def makeBuoyPicture(args):
+    desiredLocation = (args.lat, args.lon)
+    myBuoySelector = BuoySelector(desiredLocation, args.bf)
+    myBuoySelector.buildBOIDF()
+    myBuoySelector.mapBuoys()
+
 def main():
     parser = argparse.ArgumentParser()
     #parser.add_argument("-s", type=str, required=True, help="buoy station id")
@@ -526,7 +765,10 @@ def main():
     #parser.add_argument("--action", type=str, required=True, help="update-realtime, update-historical, or display-data")
     args = parser.parse_args()
 
-    updateRealtimeData(args)
+    makeBuoyPicture(args)
+    #getBuoyLocations(args)
+    #updateHistoricalData(args)
+    #updateRealtimeData(args)
     #addDesiredBuoysToDB(args)
     #desiredLocation = (args.lat, args.lon)
 
