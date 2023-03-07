@@ -10,7 +10,7 @@ import warnings
 import time
 from datetime import date
 from BuoyDataUtilities import cleanBuoyData, buildSwellDirDict, makeCircularHist, constructBuoyDict
-import config
+import config_local as config
 import pymysql
 import sys
 
@@ -716,6 +716,8 @@ def updateHistoricalData(args):
 def addDesiredBuoysToDB(args):
     desiredLocation = (args.lat, args.lon)
     myBuoySelector = BuoySelector(desiredLocation, args.bf)
+    myBuoySelector.getActiveBuoys()
+    myBuoySelector.getBuoysOfInterest()
 
     dbInteractor = DatabaseInteractor() 
     if not dbInteractor.successfulConnection:

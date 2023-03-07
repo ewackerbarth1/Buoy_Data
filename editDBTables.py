@@ -1,5 +1,5 @@
 import pymysql
-import config
+import config_local as config
 
 def startRDSConnection():
     # TODO: why am I using a DictCursor instead of a Cursor?
@@ -67,6 +67,10 @@ def main():
     connection = startRDSConnection()
     if not connection:
         return
+
+    #createStationsTable(connection)
+    #createRealtimeDataTable(connection)
+    #createHistoricalDataTable(connection)
 
     #connection.commit()
     connection.close()
