@@ -63,6 +63,10 @@ def createStationsTable(connection):
         )
     ''')
 
+def addTimestampColumnToTable(connection, tableName: str):
+    sqlCmd = f'ALTER TABLE {tableName} ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
+    connection.cursor().execute(sqlCmd)
+
 def main():
     connection = startRDSConnection()
     if not connection:
@@ -71,6 +75,8 @@ def main():
     #createStationsTable(connection)
     #createRealtimeDataTable(connection)
     #createHistoricalDataTable(connection)
+    #addTimestampColumnToTable(connection, 'realtime_data')
+    #addTimestampColumnToTable(connection, 'historical_data')
 
     #connection.commit()
     connection.close()

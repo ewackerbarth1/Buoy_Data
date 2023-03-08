@@ -8,7 +8,7 @@ import argparse
 import re
 import warnings
 import time
-from datetime import date
+from datetime import date, datetime, timedelta
 from BuoyDataUtilities import cleanBuoyData, buildSwellDirDict, makeCircularHist, constructBuoyDict
 import config_local as config
 import pymysql
@@ -105,7 +105,7 @@ class BuoySelector():
 
             thisBuoyData = buoyInfo + buoyReadings
 
-            hoverText = f'{stationID}, {distanceAway:0.2f} NM away'
+            hoverText = f'{stationID}, wvht [m, %rt, %hi]: {thisBuoy.recentWVHT}m / {thisBuoy.wvhtPercentileRealtime:0.0f}% / {thisBuoy.wvhtPercentileHistorical:0.0f}%, swp [s]: {thisBuoy.recentSwP}' #{distanceAway:0.2f} NM away'
             thisBuoyData.append(hoverText)
             boiData.append(thisBuoyData)
             
@@ -127,8 +127,84 @@ class BuoySelector():
         lons *= 180 / np.pi
         return lats, lons
 
+    def plotRangeCircles(self, fig):
+        nSamplesPerCircle = 100
+        hoursAway = [4, 12, 24, 48]
+        prototypeSwellPeriodInSeconds = 15  
+        bearings = np.linspace(0, 2*np.pi, nSamplesPerCircle)
+        for swellEta in hoursAway:
+            distanceAwayNM = convertSwellETAToDistance(prototypeSwellPeriodInSeconds, swellEta)
+            lats, lons = self.generateConstantDistancePoints(bearings, distanceAwayNM, self.currentLoc[0], self.currentLoc[1])
+
+            fig.add_trace(go.Scattergeo(
+                lon = lons,
+                lat = lats,
+                mode = 'lines',
+                name = f'+{swellEta} hrs',
+                hoverinfo = 'name',
+                opacity = 0.5,
+                marker = dict(
+                    color = 'rgb(0, 0, 0)'
+                    )
+                )
+                )
+
+    def plotWaveheightMarkers(self, fig):
+        wvhtPercentiles = self.buoysDF['wvhtPercentileHistorical'].to_numpy()
+        markerSizes = wvhtPercentiles // 10 + 6
+
+        fig.add_trace(go.Scattergeo(
+            lon = self.buoysDF['lon'],
+            lat = self.buoysDF['lat'],
+            text = self.buoysDF['hoverText'],
+            mode = 'markers',
+            name = 'buoys',
+            hoverinfo = 'lat+lon+text',
+            marker = dict(
+                color = 'rgb(255, 0, 0)',
+                symbol = 'circle',
+                size = markerSizes 
+                )
+            )
+            )
+
+    def plotSwellDirection(self, fig):
+        symbolDict = {
+                0: 'triangle-up',
+                45: 'triangle-ne',
+                90: 'triangle-right', 
+                135: 'triangle-se',
+                180: 'triangle-down',
+                225: 'triangle-sw',
+                270: 'triangle-left',
+                315: 'triangle-nw'
+                }
+
+        swellDirs = self.buoysDF['swd'].to_numpy()
+        symbolMarkers = []
+        for thisDir in swellDirs:
+            q, r = divmod(thisDir, 45)
+            nearestDir = 45 * q
+            symbolMarkers.append(symbolDict[nearestDir])
+
+        fig.add_trace(go.Scattergeo(
+            lon = self.buoysDF['lon'],
+            lat = self.buoysDF['lat'],
+            mode = 'markers',
+            text = self.buoysDF['swd'],
+            hoverinfo = 'text',
+            showlegend = False,
+            marker = dict(
+                color = 'rgb(255, 165, 0)',
+                symbol = symbolMarkers,
+                )
+            )
+            )
+
     def mapBuoys(self):
         fig = go.Figure(go.Scattergeo())
+
+        # map layout
         fig.update_geos(projection_type="natural earth",
                 showcoastlines = True,
                 showland = True,
@@ -141,6 +217,7 @@ class BuoySelector():
                     )
                 )
 
+        # current location marker
         fig.add_trace(go.Scattergeo(lon = [self.currentLoc[1]], lat = [self.currentLoc[0]],
             mode = 'markers',
             name = 'Current Location',
@@ -150,38 +227,9 @@ class BuoySelector():
                 )
             ))
 
-        # generate range circles
-        nSamplesPerCircle = 100
-        hoursAway = [1, 4, 12, 24, 48]
-        prototypeSwellPeriodInSeconds = 15  
-        bearings = np.linspace(0, 2*np.pi, nSamplesPerCircle)
-        for swellEta in hoursAway:
-            distanceAwayNM = convertSwellETAToDistance(prototypeSwellPeriodInSeconds, swellEta)
-            lats, lons = self.generateConstantDistancePoints(bearings, distanceAwayNM, self.currentLoc[0], self.currentLoc[1])
-
-            fig.add_trace(go.Scattergeo(
-                lon = lons,
-                lat = lats,
-                text = self.buoysDF['hoverText'],
-                mode = 'lines',
-                name = f'+{swellEta} hrs',
-                marker = dict(
-                    color = 'rgb(0, 0, 0)'
-                    )
-                )
-                )
-
-        fig.add_trace(go.Scattergeo(
-            lon = self.buoysDF['lon'],
-            lat = self.buoysDF['lat'],
-            text = self.buoysDF['hoverText'],
-            mode = 'markers',
-            name = 'buoys',
-            marker = dict(
-                color = 'rgb(255, 0, 0)'
-                )
-            )
-            )
+        self.plotRangeCircles(fig)
+        self.plotWaveheightMarkers(fig)
+        self.plotSwellDirection(fig)
 
         fig.update_layout(height=600, margin={"r":0,"t":0,"l":0,"b":0})
         fig.show()
@@ -645,6 +693,51 @@ class DatabaseInteractor():
         realtimeDF = convertJSONStrToDF(realtimeJSONStr)
         return realtimeDF
 
+    def getLastTableUpdateTimestamp(self, tableName: str, stationID: str):
+        thisCursor = self.connection.cursor()
+        sqlCmd = f'SELECT created_at FROM {tableName} WHERE station_id = %s'
+        thisCursor.execute(sqlCmd, (stationID,))
+
+        timestamps = thisCursor.fetchone()
+        thisCursor.close()
+        if timestamps is None:
+            print(f'No {tableName} entry for station {stationID}')
+            return None 
+
+        timestamp = timestamps[0]
+        print(f'last {tableName} update for station {stationID} at {timestamp}')
+        return timestamp
+
+    def isItTimeToUpdateRealtimeData(self, stationID: str) -> bool:
+        updatePeriodInHours = 1
+        updatePeriod = timedelta(hours=updatePeriodInHours)
+
+        lastUpdateTimeStamp = self.getLastTableUpdateTimestamp('realtime_data', stationID)
+        if lastUpdateTimeStamp is None:
+            return True
+        currentTimestamp = datetime.now()
+        timeSinceLastUpdate = currentTimestamp - lastUpdateTimeStamp
+        print(f'Time since last realtime data update for station {stationID} = {timeSinceLastUpdate}')
+
+        if timeSinceLastUpdate > updatePeriod:
+            return True
+        else:
+            return False
+
+    def isItTimeToUpdateHistoricalData(self, stationID: str) -> bool:
+        lastUpdateTimeStamp = self.getLastTableUpdateTimestamp('historical_data', stationID)
+        if lastUpdateTimeStamp is None:
+            return True
+
+        lastUpdateMonth = lastUpdateTimeStamp.month
+        print(f'Last historical data update for station {stationID} was in month {lastUpdateMonth}')
+        currentMonth = datetime.now().month
+
+        if lastUpdateMonth != currentMonth:
+            return True
+        else:
+            return False
+
     def getHistoricalData(self, stationID):
         thisCursor = self.connection.cursor()
         sqlCmd = 'SELECT data FROM historical_data WHERE station_id = %s'
@@ -672,12 +765,16 @@ def updateRealtimeData(args):
 
     for stationID in boiList:
         # check if buoy is in stations table
-        buoyInTable = dbInteractor.checkForBuoyExistenceInDB(stationID)
-        if not buoyInTable:
+        if not dbInteractor.checkForBuoyExistenceInDB(stationID):
             print(f'station {stationID} is not in the database, so please add it before attempting to update its data!')
             continue
 
-        # if it is, then get realtime data set for it 
+        # if it is, then check whether the current data is outdated
+        if not dbInteractor.isItTimeToUpdateRealtimeData(stationID):
+            print(f'realtime data for {stationID} is still current!')
+            continue
+
+        # if it is, then request the most current data from NOAA
         thisBuoy = NDBCBuoy(stationID)
         thisBuoy.buildRealtimeDataFrame()
 
@@ -699,9 +796,13 @@ def updateHistoricalData(args):
 
     for stationID in boiList:
         # check if buoy is in stations table
-        buoyInTable = dbInteractor.checkForBuoyExistenceInDB(stationID)
-        if not buoyInTable:
+        if not dbInteractor.checkForBuoyExistenceInDB(stationID):
             print(f'station {stationID} is not in the database, so please add it before attempting to update its data!')
+            continue
+
+        # if it is, check whether it's time to update the historical data
+        if not dbInteractor.isItTimeToUpdateHistoricalData(stationID):
+            print(f'historical data for {stationID} is still applicable!')
             continue
 
         # if it is, then get realtime data set for it 
@@ -725,8 +826,7 @@ def addDesiredBuoysToDB(args):
         return
 
     for stationID, latLon in myBuoySelector.activeBOI.items():
-        buoyInTable = dbInteractor.checkForBuoyExistenceInDB(stationID)
-        if buoyInTable:
+        if dbInteractor.checkForBuoyExistenceInDB(stationID):
             print(f'station {stationID} is already in the database!')
         else:
             print(f'adding station {stationID} to database...')
@@ -769,9 +869,9 @@ def main():
 
     makeBuoyPicture(args)
     #getBuoyLocations(args)
-    #updateHistoricalData(args)
-    #updateRealtimeData(args)
     #addDesiredBuoysToDB(args)
+    #updateRealtimeData(args)
+    #updateHistoricalData(args)
     #desiredLocation = (args.lat, args.lon)
 
     #if args.action == 'update-realtime':
