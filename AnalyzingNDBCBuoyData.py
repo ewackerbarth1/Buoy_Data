@@ -149,6 +149,55 @@ class BuoySelector():
                 )
                 )
 
+    def plotRangeBands(self, fig):
+        nSamplesPerCircle = 100
+        hoursAway = [4, 12, 24, 48]
+        prototypeSwellPeriodInSeconds = 15  
+        minSwellPeriod = 12
+        maxSwellPeriod = 18
+        bearings = np.linspace(0, 2*np.pi, nSamplesPerCircle)
+        #bearings = np.concatenate((bearings, np.array([0])))
+        #print(f'bearings = {bearings}')
+        for swellEta in hoursAway:
+            maxDistanceAwayNM = convertSwellETAToDistance(maxSwellPeriod, swellEta)
+            minDistanceAwayNM = convertSwellETAToDistance(minSwellPeriod, swellEta)
+            latsMin, lonsMin = self.generateConstantDistancePoints(bearings, minDistanceAwayNM, self.currentLoc[0], self.currentLoc[1])
+            latsMax, lonsMax = self.generateConstantDistancePoints(bearings, maxDistanceAwayNM, self.currentLoc[0], self.currentLoc[1])
+
+            lats = np.concatenate((latsMax, latsMin[::-1]))
+            lons = np.concatenate((lonsMax, lonsMin[::-1]))
+            #print(f'lats = {lats}')
+            #print(f'lons = {lons}')
+
+            fig.add_trace(go.Scattergeo(
+                lon = lons,
+                lat = lats,
+                mode = 'lines',
+                name = f'+{swellEta} hrs',
+                hoverinfo = 'name',
+                fillcolor = 'rgba(0, 128, 128, 0.5)',
+                fill = 'toself',
+                line = dict(
+                    width = 0
+                    )
+                )
+                )
+
+            latsTriangle = np.array([latsMax[0], latsMin[1], latsMin[0], latsMax[0]])
+            lonsTriangle = np.array([lonsMax[0], lonsMin[1], lonsMin[0], lonsMax[0]])
+
+            fig.add_trace(go.Scattergeo(
+                lon = lonsTriangle,
+                lat = latsTriangle,
+                mode = 'lines',
+                fill = 'toself',
+                fillcolor = 'rgba(0, 128, 128, 0.5)',
+                line = dict(
+                    width = 0
+                    )
+                )
+                )
+
     def plotWaveheightMarkers(self, fig):
         wvhtPercentiles = self.buoysDF['wvhtPercentileHistorical'].to_numpy()
         markerSizes = wvhtPercentiles // 10 + 6
@@ -227,7 +276,7 @@ class BuoySelector():
                 )
             ))
 
-        self.plotRangeCircles(fig)
+        self.plotRangeBands(fig)
         self.plotWaveheightMarkers(fig)
         self.plotSwellDirection(fig)
 
