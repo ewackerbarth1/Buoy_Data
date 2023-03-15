@@ -175,7 +175,7 @@ class BuoySelector():
                 mode = 'lines',
                 name = f'+{swellEta} hrs',
                 hoverinfo = 'name',
-                fillcolor = 'rgba(0, 128, 128, 0.5)',
+                fillcolor = 'rgba(0, 128, 128, 0.1)',
                 fill = 'toself',
                 line = dict(
                     width = 0
@@ -191,7 +191,7 @@ class BuoySelector():
                 lat = latsTriangle,
                 mode = 'lines',
                 fill = 'toself',
-                fillcolor = 'rgba(0, 128, 128, 0.5)',
+                fillcolor = 'rgba(0, 128, 128, 0.1)',
                 line = dict(
                     width = 0
                     )
@@ -217,38 +217,54 @@ class BuoySelector():
             )
             )
 
+    def buildArrow(self):
+        widthScale = 0.5
+        lengthScale = 1
+        x = [-0.5, -0.5, -1, 0, 1, 0.5, 0.5, -0.5]
+        y = [-1, 1, 1, 2, 1, 1, -1, -1]
+        arrow = np.array([x, y])
+        arrow[0, :] = widthScale * arrow[0, :]
+        arrow[1, :] = lengthScale * arrow[1, :]
+        #print(f'Arrow has shape {arrow.shape}')
+        return arrow 
+
+    def rotateArrowCW(self, arrow, theta: float):
+        R = np.array([[np.cos(theta), np.sin(theta)], [-1*np.sin(theta), np.cos(theta)]])
+        #print(f'shape of R = {R.shape}')
+        #print(f'shape of arrow = {arrow.shape}')
+        return R @ arrow
+
+    def scaleArrow(self, arrow, scaleFactor: float):
+        return scaleFactor * arrow
+
+    def translateArrow(self, arrow, lat, lon):
+        nRows, nCols = arrow.shape
+        #print(f'# of rows = {nRows}, # of cols = {nCols}')
+        return arrow + np.array([lon*np.ones(nCols), lat*np.ones(nCols)])
+
     def plotSwellDirection(self, fig):
-        symbolDict = {
-                0: 'triangle-up',
-                45: 'triangle-ne',
-                90: 'triangle-right', 
-                135: 'triangle-se',
-                180: 'triangle-down',
-                225: 'triangle-sw',
-                270: 'triangle-left',
-                315: 'triangle-nw'
-                }
-
+        prototypeArrow = self.buildArrow()
         swellDirs = self.buoysDF['swd'].to_numpy()
-        symbolMarkers = []
-        for thisDir in swellDirs:
-            q, r = divmod(thisDir, 45)
-            nearestDir = 45 * q
-            symbolMarkers.append(symbolDict[nearestDir])
+        for buoyIdx, thisDir in enumerate(swellDirs):
+            thisArrow = self.rotateArrowCW(prototypeArrow, thisDir * np.pi / 180)
+            thisArrow = self.scaleArrow(thisArrow, 0.5)
+            buoyLat = self.buoysDF['lat'].iloc[buoyIdx]
+            buoyLon = self.buoysDF['lon'].iloc[buoyIdx]
+            thisArrow = self.translateArrow(thisArrow, buoyLat, buoyLon)
 
-        fig.add_trace(go.Scattergeo(
-            lon = self.buoysDF['lon'],
-            lat = self.buoysDF['lat'],
-            mode = 'markers',
-            text = self.buoysDF['swd'],
-            hoverinfo = 'text',
-            showlegend = False,
-            marker = dict(
-                color = 'rgb(255, 165, 0)',
-                symbol = symbolMarkers,
+            fig.add_trace(go.Scattergeo(
+                lon = thisArrow[0, :],
+                lat = thisArrow[1, :],
+                text = f'{thisDir} deg',
+                mode = 'lines',
+                fill = 'toself',
+                hoverinfo = 'text',
+                fillcolor = 'rgba(128, 128, 128, 0.9)',
+                line = dict(
+                    width = 0
+                    )
                 )
-            )
-            )
+                )
 
     def mapBuoys(self):
         fig = go.Figure(go.Scattergeo())
@@ -280,7 +296,7 @@ class BuoySelector():
         self.plotWaveheightMarkers(fig)
         self.plotSwellDirection(fig)
 
-        fig.update_layout(height=600, margin={"r":0,"t":0,"l":0,"b":0})
+        fig.update_layout(showlegend=False, height=600, margin={"r":0,"t":0,"l":0,"b":0})
         fig.show()
     
 
