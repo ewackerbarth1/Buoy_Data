@@ -177,6 +177,7 @@ class BuoySelector():
                 hoverinfo = 'name',
                 fillcolor = 'rgba(0, 128, 128, 0.1)',
                 fill = 'toself',
+                showlegend = False,
                 line = dict(
                     width = 0
                     )
@@ -192,24 +193,25 @@ class BuoySelector():
                 mode = 'lines',
                 fill = 'toself',
                 fillcolor = 'rgba(0, 128, 128, 0.1)',
+                showlegend = False,
                 line = dict(
                     width = 0
                     )
                 )
                 )
 
-    def calculateMarkerSizes(self):
-        wvhtPercentiles = self.buoysDF['wvhtPercentileHistorical'].to_numpy()
+    def calculateMarkerSizes(self, wvhtPercentiles):
         markerSizes = wvhtPercentiles // 10 + 6
         return markerSizes
 
-    def getMarkerColors(self):
+    def getMarkerColors(self, swp):
         greenGEQ = 15
         redLEQ = 10
+
         greenRGB = 'rgb(0, 255, 0)'
         yellowRGB = 'rgb(255, 255, 0)'
         redRGB = 'rgb(255, 0, 0)'
-        swp = self.buoysDF['swp'].to_numpy()
+
         markerColors = []
         for p in swp:
             if p >= greenGEQ:
@@ -222,8 +224,8 @@ class BuoySelector():
         return markerColors
 
     def plotWaveheightAndPeriodMarkers(self, fig):
-        markerSizes = self.calculateMarkerSizes()
-        markerColors = self.getMarkerColors()
+        markerSizes = self.calculateMarkerSizes(self.buoysDF['wvhtPercentileHistorical'].to_numpy())
+        markerColors = self.getMarkerColors(self.buoysDF['swp'].to_numpy())
 
         fig.add_trace(go.Scattergeo(
             lon = self.buoysDF['lon'],
@@ -232,6 +234,7 @@ class BuoySelector():
             mode = 'markers',
             name = 'buoys',
             hoverinfo = 'lat+lon+text',
+            showlegend = False,
             marker = dict(
                 color = markerColors,
                 symbol = 'circle',
@@ -282,9 +285,57 @@ class BuoySelector():
                 mode = 'lines',
                 fill = 'toself',
                 hoverinfo = 'text',
-                fillcolor = 'rgba(128, 128, 128, 0.9)',
+                fillcolor = 'rgba(0, 0, 128, 0.7)',
+                showlegend = False,
                 line = dict(
                     width = 0
+                    )
+                )
+                )
+
+    def plotCurrentLocation(self, fig):
+        # current location marker
+        fig.add_trace(go.Scattergeo(lon = [self.currentLoc[1]], lat = [self.currentLoc[0]],
+            mode = 'markers',
+            name = 'Current Location',
+            showlegend = True,
+            marker = dict(
+                color = 'rgb(0, 0, 255)',
+                symbol = 'x'
+                )
+            ))
+
+    def addWvhtsToLegend(self, fig):
+        wvhtsToAddToLegend = [10, 50, 90]
+        for thisWvht in wvhtsToAddToLegend:
+            fig.add_trace(go.Scattergeo(
+                lat = [self.currentLoc[0]],
+                lon = [self.currentLoc[1]],
+                name = f'{thisWvht}th % wvht',
+                mode = 'markers',
+                visible = 'legendonly',
+                marker = dict(
+                    color = 'rgb(0, 0, 0)',
+                    symbol = 'circle',
+                    size = self.calculateMarkerSizes(thisWvht)
+                    )
+                )
+                )
+
+    def addSwpToLegend(self, fig):
+        swpToAddToLegend = [10, 13, 15]
+        names = ['period <= 10s', '10s < period < 15s', 'period >=15s']
+        for idx, thisSwp in enumerate(swpToAddToLegend):
+            fig.add_trace(go.Scattergeo(
+                lat = [self.currentLoc[0]],
+                lon = [self.currentLoc[1]],
+                name = names[idx],
+                mode = 'markers',
+                visible = 'legendonly',
+                marker = dict(
+                    color = self.getMarkerColors([thisSwp]),
+                    symbol = 'circle',
+                    size = self.calculateMarkerSizes(50)
                     )
                 )
                 )
@@ -305,21 +356,23 @@ class BuoySelector():
                     )
                 )
 
-        # current location marker
-        fig.add_trace(go.Scattergeo(lon = [self.currentLoc[1]], lat = [self.currentLoc[0]],
-            mode = 'markers',
-            name = 'Current Location',
-            marker = dict(
-                color = 'rgb(0, 0, 255)',
-                symbol = 'x'
-                )
+        self.plotRangeBands(fig)
+        self.plotSwellDirection(fig)
+        self.plotWaveheightAndPeriodMarkers(fig)
+
+        self.addWvhtsToLegend(fig)
+        self.addSwpToLegend(fig)
+
+        self.plotCurrentLocation(fig)
+
+        fig.update_layout(showlegend=True, height=600, margin={"r":0,"t":0,"l":0,"b":0})
+        fig.update_layout(legend=dict(
+            yanchor="top",
+            xanchor="left",
+            y=0.99,
+            x=0.01
             ))
 
-        self.plotRangeBands(fig)
-        self.plotWaveheightAndPeriodMarkers(fig)
-        self.plotSwellDirection(fig)
-
-        fig.update_layout(showlegend=False, height=600, margin={"r":0,"t":0,"l":0,"b":0})
         fig.show()
     
 
