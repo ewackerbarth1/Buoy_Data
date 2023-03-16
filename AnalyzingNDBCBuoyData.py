@@ -340,20 +340,32 @@ class BuoySelector():
                 )
                 )
 
+    def addSwdToLegend(self, fig):
+        fig.add_trace(go.Scattergeo( 
+            lat = [self.currentLoc[0]],
+            lon = [self.currentLoc[1]],
+            name = 'swell direction',
+            mode = 'markers',
+            visible = 'legendonly',
+            marker = dict(
+                color = 'rgb(0, 0, 128)',
+                symbol = 'arrow-up',
+                size = 10 
+                )
+            )
+            )
+
+
     def mapBuoys(self):
         fig = go.Figure(go.Scattergeo())
 
-        # map layout
-        fig.update_geos(projection_type="natural earth",
+        fig.update_geos(projection_type="orthographic",
                 showcoastlines = True,
                 showland = True,
                 showocean = True,
                 showlakes = True,
                 resolution = 50, 
-                center = dict(
-                    lon = self.currentLoc[1], 
-                    lat = self.currentLoc[0]
-                    )
+                fitbounds = 'locations'
                 )
 
         self.plotRangeBands(fig)
@@ -362,6 +374,7 @@ class BuoySelector():
 
         self.addWvhtsToLegend(fig)
         self.addSwpToLegend(fig)
+        self.addSwdToLegend(fig)
 
         self.plotCurrentLocation(fig)
 
