@@ -198,9 +198,32 @@ class BuoySelector():
                 )
                 )
 
-    def plotWaveheightMarkers(self, fig):
+    def calculateMarkerSizes(self):
         wvhtPercentiles = self.buoysDF['wvhtPercentileHistorical'].to_numpy()
         markerSizes = wvhtPercentiles // 10 + 6
+        return markerSizes
+
+    def getMarkerColors(self):
+        greenGEQ = 15
+        redLEQ = 10
+        greenRGB = 'rgb(0, 255, 0)'
+        yellowRGB = 'rgb(255, 255, 0)'
+        redRGB = 'rgb(255, 0, 0)'
+        swp = self.buoysDF['swp'].to_numpy()
+        markerColors = []
+        for p in swp:
+            if p >= greenGEQ:
+                markerColors.append(greenRGB)
+            elif p <= redLEQ:
+                markerColors.append(redRGB)
+            else:
+                markerColors.append(yellowRGB)
+
+        return markerColors
+
+    def plotWaveheightAndPeriodMarkers(self, fig):
+        markerSizes = self.calculateMarkerSizes()
+        markerColors = self.getMarkerColors()
 
         fig.add_trace(go.Scattergeo(
             lon = self.buoysDF['lon'],
@@ -210,7 +233,7 @@ class BuoySelector():
             name = 'buoys',
             hoverinfo = 'lat+lon+text',
             marker = dict(
-                color = 'rgb(255, 0, 0)',
+                color = markerColors,
                 symbol = 'circle',
                 size = markerSizes 
                 )
@@ -293,7 +316,7 @@ class BuoySelector():
             ))
 
         self.plotRangeBands(fig)
-        self.plotWaveheightMarkers(fig)
+        self.plotWaveheightAndPeriodMarkers(fig)
         self.plotSwellDirection(fig)
 
         fig.update_layout(showlegend=False, height=600, margin={"r":0,"t":0,"l":0,"b":0})
