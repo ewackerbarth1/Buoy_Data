@@ -1013,29 +1013,20 @@ def makeBuoyPicture(args):
 
 def main():
     parser = argparse.ArgumentParser()
-    #parser.add_argument("-s", type=str, required=True, help="buoy station id")
-    #parser.add_argument("-N", type=int, required=True, help="# of years for historical data")
     parser.add_argument("--lat", type=float, required=True, help="latitude in degrees")
     parser.add_argument("--lon", type=float, required=True, help="longitude in degrees")
     parser.add_argument("--bf", type=str, required=True, help="text file name containing buoys of interest")
-    #parser.add_argument("--action", type=str, required=True, help="update-realtime, update-historical, or display-data")
+    parser.add_argument("--action", type=str, required=True, help="update-data or display-map")
     args = parser.parse_args()
 
-    makeBuoyPicture(args)
-    #getBuoyLocations(args)
-    #addDesiredBuoysToDB(args)
-    #updateRealtimeData(args)
-    #updateHistoricalData(args)
-    #desiredLocation = (args.lat, args.lon)
-
-    #if args.action == 'update-realtime':
-    #    updateRealtimeData(args)
-    #elif args.action == 'update-historical':
-    #    asdf
-    #elif args.action == 'display-data':
-
-    #else:
-    #    ValueError('Invalid input for action argument! Valid inputs are: update-realtime, update-historical, display-data')
+    if args.action == 'update-data':
+        addDesiredBuoysToDB(args)
+        updateRealtimeData(args)
+        updateHistoricalData(args)
+    elif args.action == 'display-map':
+        makeBuoyPicture(args)
+    else:
+        ValueError('Invalid input for action argument! Valid inputs are: update-data or display-data')
 
 
     #myBuoySelector = BuoySelector(desiredLocation, args.bf)
