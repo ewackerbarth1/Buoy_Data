@@ -9,10 +9,85 @@ import re
 import warnings
 import time
 from datetime import date, datetime, timedelta
-from BuoyDataUtilities import cleanBuoyData, buildSwellDirDict, makeCircularHist, constructBuoyDict
+from BuoyDataUtilities import makeCircularHist
 import config_local as config
 import pymysql
 import sys
+
+def constructBuoyDict():
+    '''
+    Returns a NDBC buoy dictionary where the station IDs form the keys and the
+    corresponding (lat, lon) tuples form the values
+
+    Inputs:
+
+    Outputs:
+        buoysDict (dict): key = station ID, value = (lat, lon)
+    '''
+
+    # get and parse the active stations webpage
+    activeStationsUrl = 'https://www.ndbc.noaa.gov/activestations.xml'
+    ndbcPage = requests.get(activeStationsUrl)       #<class 'requests.models.Response'>
+    buoySoup = BeautifulSoup(ndbcPage.content, 'xml') #<class 'bs4.BeautifulSoup'>
+
+    # find buoy station types
+    buoyStations = buoySoup.find_all("station") #, {"type": "buoy"})
+    print('# of active buoys = ' + str(len(buoyStations))) # 347 active buoys as of 1/31/2021
+
+    # build buoy dictionary with id as key and (lat, lon) as value
+    buoysDict = dict()
+    for buoy in buoyStations:
+        thisKey = buoy.get("id")
+        thisLon = buoy.get("lon")
+        thisLat = buoy.get("lat")
+        buoysDict[thisKey] = (float(thisLat), float(thisLon))
+
+    return buoysDict
+
+def buildSwellDirDict():
+    '''
+    Builds dictionary to convert swell direction strings to degrees
+    N --> 0
+    W --> 90
+    S --> 180
+    E --> 270
+
+    Inputs :
+
+    Outputs [swellDirDict]:
+        swellDirDict (dict): swell direction dictionary
+
+    '''
+
+    # build dictionary
+    swellDirDict = dict()
+    dirStrings = ['N', 'NNW', 'NW', 'WNW',
+                  'W', 'WSW', 'SW', 'SSW',
+                  'S', 'SSE', 'SE', 'ESE',
+                  'E', 'ENE', 'NE', 'NNE']
+    dirDegrees = np.arange(0, 382.5, 22.5)  # 0:22.5:360
+    iCount = 0
+    for iDir in dirStrings:
+        swellDirDict[iDir] = dirDegrees[iCount]
+        iCount = iCount + 1
+
+    return swellDirDict
+
+def cleanBuoyData(dfItem):
+    '''
+    Cleans the buoy data by removing the "MM" characterization of missing data
+
+    Inputs (dfItem):
+        dfItem (): element of Pandas data frame
+
+    Outputs [dfItem]:
+        dfItem (): input value or "0" depending on whether data exists
+    '''
+
+    if dfItem == "MM":
+        return "0.0"
+    else:
+        return dfItem
 
 def formatPandasDateTimeForMySQL(pdDateTime):
     mySQLDateTime = pdDateTime.strftime('%Y-%m-%d %H:%M:%S')
@@ -701,9 +776,6 @@ class NDBCBuoy():
         ax.set_xticklabels(['N', 'NW', 'W', 'SW', 'S', 'SE', 'E', 'NE'])   #TODO: this produces a warning!!
         plt.show()
 
-    def getMostRecentReading():
-        print()
-        return []
 
 class DatabaseInteractor():
     #TODO: the config is just for the database so maybe find a way to localize the import instead of a global one at the top of this file
@@ -1027,14 +1099,6 @@ def main():
         makeBuoyPicture(args)
     else:
         ValueError('Invalid input for action argument! Valid inputs are: update-data or display-data')
-
-
-    #myBuoySelector = BuoySelector(desiredLocation, args.bf)
-    #myBuoySelector.initializeBOIDF()
-    #myBuoySelector.mapBuoys()
-    
-    #buoysDF = initializeNearbyBuoyDF(desiredLocation)
-    #mapBuoys(buoysDF, desiredLocation)
 
     #buoy1 = NDBCBuoy(args.s)
     #buoy1.buildRealtimeDataFrame()
