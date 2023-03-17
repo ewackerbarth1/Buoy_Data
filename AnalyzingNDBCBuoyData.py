@@ -14,35 +14,6 @@ import config_local as config
 import pymysql
 import sys
 
-def constructBuoyDict():
-    '''
-    Returns a NDBC buoy dictionary where the station IDs form the keys and the
-    corresponding (lat, lon) tuples form the values
-
-    Inputs:
-
-    Outputs:
-        buoysDict (dict): key = station ID, value = (lat, lon)
-    '''
-
-    # get and parse the active stations webpage
-    activeStationsUrl = 'https://www.ndbc.noaa.gov/activestations.xml'
-    ndbcPage = requests.get(activeStationsUrl)       #<class 'requests.models.Response'>
-    buoySoup = BeautifulSoup(ndbcPage.content, 'xml') #<class 'bs4.BeautifulSoup'>
-
-    # find buoy station types
-    buoyStations = buoySoup.find_all("station") #, {"type": "buoy"})
-    print('# of active buoys = ' + str(len(buoyStations))) # 347 active buoys as of 1/31/2021
-
-    # build buoy dictionary with id as key and (lat, lon) as value
-    buoysDict = dict()
-    for buoy in buoyStations:
-        thisKey = buoy.get("id")
-        thisLon = buoy.get("lon")
-        thisLat = buoy.get("lat")
-        buoysDict[thisKey] = (float(thisLat), float(thisLon))
-
-    return buoysDict
 
 def buildSwellDirDict():
     '''
@@ -131,17 +102,38 @@ def convertSwellETAToDistance(swPSeconds: float, etaHours: float) -> float:
     return distanceAway
 
 class BuoySelector():
-    def __init__(self, currentLoc: tuple, boiFName: str):
+    def __init__(self, currentLoc: tuple, boiFName: str, useDB=True):
         self.currentLoc = currentLoc
         self.boiFName = boiFName
+        self.useDB = useDB
 
-        #self.getActiveBuoys()
+        if not self.useDB:
+            self.setActiveBuoys()
+
+        #self.setActiveBuoys()
         #self.getBuoysOfInterest()
         #self.activeBuoys
         #self.activeBOI
 
-    def getActiveBuoys(self):
-        self.activeBuoys = constructBuoyDict()
+    def setActiveBuoys(self):
+
+        # get and parse the active stations webpage
+        activeStationsUrl = 'https://www.ndbc.noaa.gov/activestations.xml'
+        ndbcPage = requests.get(activeStationsUrl)       #<class 'requests.models.Response'>
+        buoySoup = BeautifulSoup(ndbcPage.content, 'xml') #<class 'bs4.BeautifulSoup'>
+
+        # find buoy station types
+        buoyStations = buoySoup.find_all("station") #, {"type": "buoy"})
+        print('# of active buoys = ' + str(len(buoyStations))) # 347 active buoys as of 1/31/2021
+
+        # build buoy dictionary with id as key and (lat, lon) as value
+        self.activeBuoys = dict()
+        for buoy in buoyStations:
+            thisKey = buoy.get("id")
+            thisLon = buoy.get("lon")
+            thisLat = buoy.get("lat")
+            self.activeBuoys[thisKey] = (float(thisLat), float(thisLon))
+
 
     def parseBOIFile(self) -> list:
         with open(self.boiFName) as f:
@@ -164,13 +156,30 @@ class BuoySelector():
         boiList = self.parseBOIFile()
         self.getActiveBOI(boiList)
 
+    def getBuoyLocation(self, stationID) -> tuple[float]:
+        return self.activeBuoys[stationID]
+
     def buildBOIDF(self):
         boiList = self.parseBOIFile()
         boiData = []
         for stationID in boiList:
             print(f'Instantiating NDBCBuoy {stationID}...')
             thisBuoy = NDBCBuoy(stationID)
-            thisBuoy.fetchDataFromDB()
+
+            if self.useDB:
+                fetchSuccess = thisBuoy.fetchDataFromDB()
+                if not fetchSuccess:
+                    print('Unable to fetch data for station {stationID} from database')
+                    continue
+            else:
+                if stationID not in self.activeBuoys:
+                    print(f'Requested station {stationID} is not active!')
+                    continue
+
+                stationLatLon = self.getBuoyLocation(stationID) 
+                thisBuoy.setLocation(stationLatLon)
+                thisBuoy.fetchDataFromNDBCPage()
+
             thisBuoy.buildAnalysisProducts()
 
             buoyLatLon = (thisBuoy.lat, thisBuoy.lon)
@@ -180,7 +189,7 @@ class BuoySelector():
 
             thisBuoyData = buoyInfo + buoyReadings
 
-            hoverText = f'{stationID}, wvht [m, %rt, %hi]: {thisBuoy.recentWVHT}m / {thisBuoy.wvhtPercentileRealtime:0.0f}% / {thisBuoy.wvhtPercentileHistorical:0.0f}%, swp [s]: {thisBuoy.recentSwP}' #{distanceAway:0.2f} NM away'
+            hoverText = f'{stationID}, wvht [m, %rt, %hi]: {thisBuoy.recentWVHT:0.1f}m / {thisBuoy.wvhtPercentileRealtime:0.0f}% / {thisBuoy.wvhtPercentileHistorical:0.0f}%, swp [s]: {thisBuoy.recentSwP}' #{distanceAway:0.2f} NM away'
             thisBuoyData.append(hoverText)
             boiData.append(thisBuoyData)
             
@@ -647,14 +656,25 @@ class NDBCBuoy():
     def setHistoricalDFFromDB(self, dBInteractor):
         self.dataFrameHistorical = dBInteractor.getHistoricalData(self.stationID)
 
-    def fetchDataFromDB(self):
+    def setLocation(self, buoyLatLon: tuple[float]):
+        self.lat, self.lon = buoyLatLon
+
+    def fetchDataFromNDBCPage(self):
+        self.buildRealtimeDataFrame()
+        self.buildHistoricalDataFrame()
+
+    def fetchDataFromDB(self) -> bool:
         dBInteractor = DatabaseInteractor()
+        if not dBInteractor.successfulConnection:
+            print('Connection failed so we cannot fetch any data')
+            return False
 
         self.setBuoyLocationFromDB(dBInteractor)
         self.setRealtimeDFFromDB(dBInteractor)
         self.setHistoricalDFFromDB(dBInteractor)
 
         dBInteractor.closeConnection()
+        return True
 
     def pushDataToDB(self):
         return
@@ -1043,7 +1063,7 @@ def updateHistoricalData(args):
 def addDesiredBuoysToDB(args):
     desiredLocation = (args.lat, args.lon)
     myBuoySelector = BuoySelector(desiredLocation, args.bf)
-    myBuoySelector.getActiveBuoys()
+    myBuoySelector.setActiveBuoys()
     myBuoySelector.getBuoysOfInterest()
 
     dbInteractor = DatabaseInteractor() 
@@ -1077,9 +1097,9 @@ def getBuoyLocations(args):
 
     dbInteractor.closeConnection()
 
-def makeBuoyPicture(args):
+def makeBuoyPicture(args: argparse.Namespace):
     desiredLocation = (args.lat, args.lon)
-    myBuoySelector = BuoySelector(desiredLocation, args.bf)
+    myBuoySelector = BuoySelector(desiredLocation, args.bf, args.db)
     myBuoySelector.buildBOIDF()
     myBuoySelector.mapBuoys()
 
@@ -1089,9 +1109,14 @@ def main():
     parser.add_argument("--lon", type=float, required=True, help="longitude in degrees")
     parser.add_argument("--bf", type=str, required=True, help="text file name containing buoys of interest")
     parser.add_argument("--action", type=str, required=True, help="update-data or display-map")
+    parser.add_argument("--db", type=bool, required=False, default=True, help="default True, set False to not use a database")
+
     args = parser.parse_args()
 
     if args.action == 'update-data':
+        if not args.db:
+            print(f'Not using data base so there is no update-data action!')
+            return
         addDesiredBuoysToDB(args)
         updateRealtimeData(args)
         updateHistoricalData(args)
