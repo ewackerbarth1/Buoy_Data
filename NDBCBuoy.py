@@ -10,34 +10,6 @@ import time
 from BuoyDataUtilities import makeCircularHist
 from DatabaseInteractor import DatabaseInteractor
 
-def buildSwellDirDict():
-    '''
-    Builds dictionary to convert swell direction strings to degrees
-    N --> 0
-    W --> 90
-    S --> 180
-    E --> 270
-
-    Inputs :
-
-    Outputs [swellDirDict]:
-        swellDirDict (dict): swell direction dictionary
-
-    '''
-
-    # build dictionary
-    swellDirDict = dict()
-    dirStrings = ['N', 'NNW', 'NW', 'WNW',
-                  'W', 'WSW', 'SW', 'SSW',
-                  'S', 'SSE', 'SE', 'ESE',
-                  'E', 'ENE', 'NE', 'NNE']
-    dirDegrees = np.arange(0, 382.5, 22.5)  # 0:22.5:360
-    iCount = 0
-    for iDir in dirStrings:
-        swellDirDict[iDir] = dirDegrees[iCount]
-        iCount = iCount + 1
-
-    return swellDirDict
 
 def cleanBuoyData(dfItem):
     '''
@@ -60,7 +32,7 @@ class NDBCBuoy():
     def __init__(self, stationID):
         self.stationID = stationID
         self.baseURLRealtime = 'https://www.ndbc.noaa.gov/data/realtime2/'
-        self.swellDict = buildSwellDirDict()
+        self.swellDict = self.buildSwellDirDict()
         self.buildStationURLs()
         self.nYearsBack = 5   # number of years to go back for historical analysis
         #self.baseURLHistorical = 
@@ -77,6 +49,29 @@ class NDBCBuoy():
         #self.wvhtPercentileHistorical
         #self.wvhtPercentileRealtime
         #self.arrivalWindow
+
+    def buildSwellDirDict(self) -> dict:
+        '''
+        Builds dictionary to convert incoming swell direction strings to degrees for swell arrows
+
+        incoming from S --> 0 
+        incoming from W --> 90
+        incoming from N --> 180
+        incoming from E --> 270
+    
+        '''
+        swellDirDict = dict()
+        dirStrings = ['S', 'SSW', 'SW', 'WSW',
+                      'W', 'WNW', 'NW', 'NNW',
+                      'N', 'NNE', 'NE', 'ENE',
+                      'E', 'ESE', 'SE', 'SSE']
+        dirDegrees = np.arange(0, 382.5, 22.5)  # 0:22.5:360
+        iCount = 0
+        for iDir in dirStrings:
+            swellDirDict[iDir] = dirDegrees[iCount]
+            iCount = iCount + 1
+    
+        return swellDirDict
 
     def setArrivalWindow(self, arrivalWindow: tuple[float]):
         self.arrivalWindow = arrivalWindow
