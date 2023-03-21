@@ -4,7 +4,7 @@ from NDBCBuoy import NDBCBuoy
 from BuoySelector import BuoySelector
 
 
-def updateRealtimeData(args):
+def updateRealtimeData(args: argparse.Namespace):
     # need a list of buoys
     desiredLocation = (args.lat, args.lon)
     myBuoySelector = BuoySelector(desiredLocation, args.bf)
@@ -35,7 +35,7 @@ def updateRealtimeData(args):
 
     dbInteractor.closeConnection()
 
-def updateHistoricalData(args):
+def updateHistoricalData(args: argparse.Namespace):
     # need a list of buoys
     desiredLocation = (args.lat, args.lon)
     myBuoySelector = BuoySelector(desiredLocation, args.bf)
@@ -66,7 +66,7 @@ def updateHistoricalData(args):
 
     dbInteractor.closeConnection()
 
-def addDesiredBuoysToDB(args):
+def addDesiredBuoysToDB(args: argparse.Namespace):
     desiredLocation = (args.lat, args.lon)
     myBuoySelector = BuoySelector(desiredLocation, args.bf)
     myBuoySelector.setActiveBuoys()
@@ -87,7 +87,7 @@ def addDesiredBuoysToDB(args):
     dbInteractor.printContentsOfStationsTable()
     dbInteractor.closeConnection()
 
-def getBuoyLocations(args):
+def getBuoyLocations(args: argparse.Namespace):
     desiredLocation = (args.lat, args.lon)
     myBuoySelector = BuoySelector(desiredLocation, args.bf)
     boiList = myBuoySelector.parseBOIFile()
@@ -109,6 +109,11 @@ def makeBuoyPicture(args: argparse.Namespace):
     myBuoySelector.buildBOIDF()
     myBuoySelector.mapBuoys()
 
+def updateData(args: argparse.Namespace):
+    addDesiredBuoysToDB(args)
+    updateRealtimeData(args)
+    updateHistoricalData(args)
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--lat", type=float, required=True, help="latitude in degrees")
@@ -123,13 +128,11 @@ def main():
         if not args.db:
             print(f'Not using database so there is no update-data action!')
             return
-        addDesiredBuoysToDB(args)
-        updateRealtimeData(args)
-        updateHistoricalData(args)
+        updateData(args)
     elif args.action == 'display-map':
         makeBuoyPicture(args)
     else:
-        ValueError('Invalid input for action argument! Valid inputs are: update-data or display-data')
+        raise ValueError('Invalid input for action argument! Valid inputs are: update-data or display-data')
 
 if __name__ == "__main__":
     main()

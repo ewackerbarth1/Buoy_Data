@@ -7,21 +7,12 @@ import matplotlib.pyplot as plt
 import re
 import warnings
 import time
+from datetime import date, datetime, timedelta
 from BuoyDataUtilities import makeCircularHist
 from DatabaseInteractor import DatabaseInteractor
 
 
 def cleanBuoyData(dfItem):
-    '''
-    Cleans the buoy data by removing the "MM" characterization of missing data
-
-    Inputs (dfItem):
-        dfItem (): element of Pandas data frame
-
-    Outputs [dfItem]:
-        dfItem (): input value or "0" depending on whether data exists
-    '''
-
     if dfItem == "MM":
         return "0.0"
     else:
@@ -29,28 +20,29 @@ def cleanBuoyData(dfItem):
 
 
 class NDBCBuoy():
-    def __init__(self, stationID):
+    def __init__(self, stationID: str):
         self.stationID = stationID
         self.baseURLRealtime = 'https://www.ndbc.noaa.gov/data/realtime2/'
         self.swellDict = self.buildSwellDirDict()
-        self.buildStationURLs()
+        self.urlRealtime = self.buildStationURLs()
         self.nYearsBack = 5   # number of years to go back for historical analysis
-        #self.baseURLHistorical = 
-        #self.urlRealtime
-        #self.urlHistorical
-        #self.dataFrameRealtime
-        #self.dataFrameHistorical
-        #self.lat
-        #self.lon
-        #self.nSampsPerHour
-        #self.recentWVHT
-        #self.recentSwP
-        #self.recentSwD
-        #self.wvhtPercentileHistorical
-        #self.wvhtPercentileRealtime
-        #self.arrivalWindow
+        self.nSecondsToPauseBtwnRequests = 5
 
-    def buildSwellDirDict(self) -> dict:
+        # default values
+        self.nSampsPerHour = -1
+        self.dataFrameRealtime = []
+        self.dataFrameHistorical = []
+        self.lat = 0.0
+        self.lon = 0.0
+        self.recentWVHT = -1.0
+        self.recentSwP = -1.0
+        self.recentSwD = -1.0
+        self.wvhtPercentileHistorical = -1.0
+        self.wvhtPercentileRealtime = -1.0
+        self.arrivalWindow = []
+
+    @staticmethod
+    def buildSwellDirDict() -> dict:
         '''
         Builds dictionary to convert incoming swell direction strings to degrees for swell arrows
 
@@ -76,25 +68,25 @@ class NDBCBuoy():
     def setArrivalWindow(self, arrivalWindow: tuple[float]):
         self.arrivalWindow = arrivalWindow
 
-    def buildStationURLs(self):
-        self.urlRealtime = f'{self.baseURLRealtime}{self.stationID}.spec'
+    def buildStationURLs(self) -> str:
+        urlRealtime = f'{self.baseURLRealtime}{self.stationID}.spec'
+        return urlRealtime
 
-    def makeHistoricalDataRequest(self, year: int):
+    def makeHistoricalDataRequest(self, year: int) -> requests.models.Response:
         historicalURL = f'https://www.ndbc.noaa.gov/view_text_file.php?filename={self.stationID}h{year}.txt.gz&dir=data/historical/stdmet/'
-        nSecondsToPause = 5
-        print(f'requesting {historicalURL} after {nSecondsToPause}s pause...')
-        time.sleep(nSecondsToPause)
+        print(f'requesting {historicalURL} after {self.nSecondsToPauseBtwnRequests}s pause...')
+        time.sleep(self.nSecondsToPauseBtwnRequests)
         ndbcPage = requests.get(historicalURL)       #<class 'requests.models.Response'>
         return ndbcPage
 
-    def makeRealtimeDataRequest(self):
-        nSecondsToPause = 5
-        print(f'requesting {self.urlRealtime} after {nSecondsToPause}s pause...')
-        time.sleep(nSecondsToPause)
+    def makeRealtimeDataRequest(self) -> requests.models.Response:
+        print(f'requesting {self.urlRealtime} after {self.nSecondsToPauseBtwnRequests}s pause...')
+        time.sleep(self.nSecondsToPauseBtwnRequests)
         ndbcPage = requests.get(self.urlRealtime)       #<class 'requests.models.Response'>
         return ndbcPage
 
-    def parseRealtimeData(self, ndbcPage):
+    @staticmethod
+    def parseRealtimeData(ndbcPage) -> pd.DataFrame:
         #TODO: check other ways of doing this!!
         buoySoup = BeautifulSoup(ndbcPage.content, 'html.parser') #<class 'bs4.BeautifulSoup'>
 
@@ -126,8 +118,6 @@ class NDBCBuoy():
         buoyDF['Date'] = pd.to_datetime(buoyDF['Date'], format='%Y%m%d%H%M')
 
         # drop unncessary columns
-        #to_drop = ['#YY', 'MM', 'DD', 'hh', 'mm', 'STEEPNESS', 'SwH', 'WWH', 'WWP', 'WWD', 'APD', 'MWD']
-        #buoyDF.drop(to_drop, inplace=True, axis=1)
         buoyDF = buoyDF.loc[:, ['Date', 'WVHT', 'SwP', 'SwD']]
     
         # clean data
@@ -152,7 +142,8 @@ class NDBCBuoy():
         self.dataFrameRealtime = self.cleanRealtimeDataFrame(rawDF)
         self.checkSamplingPeriod(self.dataFrameRealtime)
 
-    def getHistoricalYearsAndMonths(self, nYears: int):
+    @staticmethod
+    def getHistoricalYearsAndMonths(nYears: int) -> tuple:
         todaysDate = date.today()
         currentYear, currentMonth = todaysDate.year, todaysDate.month
         monthsList = []
@@ -166,7 +157,8 @@ class NDBCBuoy():
 
         return yearsList, monthsList
 
-    def parseHistoricalData(self, ndbcPage, monthsToCheck):
+    @staticmethod
+    def parseHistoricalData(ndbcPage, monthsToCheck: list[int]):
         buoySoup = BeautifulSoup(ndbcPage.content, 'html.parser') #<class 'bs4.BeautifulSoup'>
 
         soupString = str(buoySoup)# convert soup to a string
@@ -200,7 +192,8 @@ class NDBCBuoy():
         print(buoyDF)
         return buoyDF
 
-    def cleanHistoricalDataFrame(self, buoyDF):
+    @staticmethod
+    def cleanHistoricalDataFrame(buoyDF):
         # build date column
         buoyDF['Date'] = buoyDF['#YY'] + buoyDF['MM'] + buoyDF['DD'] + buoyDF['hh'] + buoyDF['mm']# add a date column
         buoyDF['Date'] = pd.to_datetime(buoyDF['Date'], format='%Y%m%d%H%M')
@@ -221,7 +214,6 @@ class NDBCBuoy():
             ndbcPage = self.makeHistoricalDataRequest(yearToCheck)
             rawDF = self.parseHistoricalData(ndbcPage, monthsToCheck)
             thisDataFrame = self.cleanHistoricalDataFrame(rawDF)
-            # make any additionalChecks
             historicalDataFrames.append(thisDataFrame)
 
         self.dataFrameHistorical = pd.concat(historicalDataFrames)
@@ -258,33 +250,6 @@ class NDBCBuoy():
         dBInteractor.closeConnection()
         return True
 
-    def pushDataToDB(self):
-        return
-
-    def analyzeWVHTDistribution(self, dataSetName):
-        nSamplesToAvg = 3   # most recent n samples to check
-        waveheightsRT = self.dataFrameRealtime['WVHT']
-        print(f'Last {nSamplesToAvg} samples: {waveheightsRT[0:nSamplesToAvg]}')
-        recentAvg = waveheightsRT[0:nSamplesToAvg].mean()
-        print(f'mean = {recentAvg}')
-
-        if dataSetName == 'historical':
-            waveheightsSorted = self.dataFrameHistorical['WVHT'].sort_values().to_numpy() # ascending
-        elif dataSetName == 'realtime':
-            waveheightsSorted = self.dataFrameRealtime['WVHT'][nSamplesToAvg+1:].sort_values().to_numpy() # ascending
-        else:
-            raise ValueError('historical and realtime are the only supported data sets')
-
-        print(f'sorted {dataSetName} wvhts: {waveheightsSorted}')
-
-        nTotalValues = len(waveheightsSorted)
-        ptr = 0
-        while ptr < nTotalValues and recentAvg > waveheightsSorted[ptr]:
-            ptr += 1
-
-        greaterThanFrac = ptr / nTotalValues 
-        print(f'current swell is greater than {greaterThanFrac * 100 :0.2f}% of {dataSetName} data')
-
     def setRecentReadings(self):
         self.recentWVHT = self.dataFrameRealtime['WVHT'].iloc[0]
         self.recentSwP = self.dataFrameRealtime['SwP'].iloc[0]
@@ -320,9 +285,9 @@ class NDBCBuoy():
         self.checkSamplingPeriod(self.dataFrameRealtime)
 
     def convertRequestedDaysIntoSamples(self, nDays: int) -> int:
-        if nDays > 45:
-            print(f'Only have 45 days worth of realtime data so just plotting the last 45 days')
-            nDays = 45
+        if nDays > 44:
+            print(f'Only have 44 days worth of realtime data so just plotting the last 45 days')
+            nDays = 44
         nSamples = 24 * self.nSampsPerHour * nDays   
         return nSamples
 
@@ -335,13 +300,15 @@ class NDBCBuoy():
         sampleDates = sampleDates[::-1]
         return waveheights, sampleDates
     
-    def estimateDensityGaussianKernel(self, data):
+    @staticmethod
+    def estimateDensityGaussianKernel(data: np.ndarray[np.float64]) -> tuple:
         xd = np.linspace(0, max(data), 100)
         density = sum(norm(xi).pdf(xd) for xi in data)
         density = density / (sum(density) * (xd[1]-xd[0]))
         return xd, density
 
-    def estimateDensityTophatKernel(self, data, binWidth: float):
+    @staticmethod
+    def estimateDensityTophatKernel(data: np.ndarray[np.float64], binWidth: float) -> tuple:
         xd = np.linspace(0, max(data), 100)
         density = np.zeros(xd.shape)
         for xi in data:
@@ -351,7 +318,8 @@ class NDBCBuoy():
         density = density / (sum(density) * (xd[1] - xd[0]))
         return xd, density
 
-    def getNthPercentileSample(self, samplingVector, pmf, nthPercentile: float):
+    @staticmethod
+    def getNthPercentileSample(samplingVector: np.ndarray[np.float64], pmf: np.ndarray[np.float64], nthPercentile: float) -> np.float64:
         mass = 0
         sampleIdx = 0
         samplingBinWidth = samplingVector[1] - samplingVector[0]
@@ -361,14 +329,16 @@ class NDBCBuoy():
 
         return samplingVector[sampleIdx]
     
-    def convertTimestampsToTimedeltas(self, timestamps):
+    @staticmethod
+    def convertTimestampsToTimedeltas(timestamps: np.ndarray[np.datetime64]) -> np.ndarray[np.float64]:
         now = np.datetime64('now')
         deltas = now - timestamps
         deltas = deltas.astype('timedelta64[h]')
         deltas = -1 * deltas.astype('float')
         return deltas
 
-    def getXTicksForTimeDeltas(self, timeDeltas: np.ndarray[np.float64]) -> list[float]:
+    @staticmethod
+    def getXTicksForTimeDeltas(timeDeltas: np.ndarray[np.float64]) -> list[float]:
         minTimeDelta = min(timeDeltas)
         xTicks = []
         q, r = divmod(int(minTimeDelta), 24)
@@ -436,21 +406,6 @@ class NDBCBuoy():
         #manager.full_screen_toggle()
         plt.savefig(f'station_{self.stationID}.png', format='png')
         #plt.show()
-
-        #fig, ax1 = plt.subplots()
-        #ax2 = ax1.twiny()
-
-        #ax2.plot(rtDist, rtSamplingVector, color='darkorange', label='rt dist')
-
-        #ax1.plot(sampleDates, waveheights, 'o-', color='royalblue', label='wvhts')
-        #ax1.set_ylabel('Wave height [m]')
-        #ax1.set_xlabel('sample times UTC')
-        #ax1.tick_params(axis='x', labelrotation=45)
-
-        #ax1.legend()
-        #ax2.legend()
-
-
 
     def plotPastNDaysWvht(self, nDays: int):
         nSamples = self.convertRequestedDaysIntoSamples(nDays)
