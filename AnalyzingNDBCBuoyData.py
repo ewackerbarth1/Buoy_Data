@@ -120,7 +120,7 @@ def main():
     parser.add_argument("--lon", type=float, required=True, help="longitude in degrees")
     parser.add_argument("--bf", type=str, required=True, help="text file name containing buoys of interest")
     parser.add_argument("--action", type=str, required=True, help="update-data or display-map")
-    parser.add_argument("--db", type=bool, required=False, default=True, help="default True, set False to not use a database")
+    parser.add_argument("--db", action='store_true', help="use this flag if you are using a MySQL db instance")
 
     args = parser.parse_args()
 

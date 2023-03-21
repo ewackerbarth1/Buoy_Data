@@ -1,5 +1,6 @@
 import pymysql
 import config_local as config
+import argparse
 
 def startRDSConnection():
     # TODO: why am I using a DictCursor instead of a Cursor?
@@ -63,6 +64,9 @@ def createStationsTable(connection):
         )
     ''')
 
+def deleteStationsTable(connection):
+    connection.cursor().execute('DROP TABLE stations')
+
 def addTimestampColumnToTable(connection, tableName: str):
     sqlCmd = f'ALTER TABLE {tableName} ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
     connection.cursor().execute(sqlCmd)
@@ -72,9 +76,24 @@ def main():
     if not connection:
         return
 
-    #createStationsTable(connection)
-    #createRealtimeDataTable(connection)
-    #createHistoricalDataTable(connection)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--action", type=str, required=True, help="create-tables or delete-tables")
+
+    args = parser.parse_args()
+
+    if args.action == 'create-tables':
+        createStationsTable(connection)
+        createRealtimeDataTable(connection)
+        createHistoricalDataTable(connection)
+        connection.commit()
+    elif args.action == 'delete-tables':
+        deleteStationsTable(connection)
+        deleteRealtimeDataTable(connection)
+        deleteHistoricalDataTable(connection)
+        connection.commit()
+    else:
+        raise ValueError('Unrecognized action argument')
+
     #addTimestampColumnToTable(connection, 'realtime_data')
     #addTimestampColumnToTable(connection, 'historical_data')
 
