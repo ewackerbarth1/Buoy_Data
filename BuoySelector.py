@@ -228,6 +228,24 @@ class BuoySelector():
                 fill = 'toself',
                 fillcolor = 'rgba(0, 128, 128, 0.1)',
                 showlegend = False,
+                hoverinfo = 'none',
+                line = dict(
+                    width = 0
+                    )
+                )
+                )
+
+            avgLat = np.mean(latsTriangle)
+            avgLon = np.mean(lonsTriangle)
+
+            fig.add_trace(go.Scattergeo(
+                lon = [avgLon],
+                lat = [avgLat],
+                mode = 'lines+text',
+                showlegend = False,
+                text = f'+{swellEta} hrs',
+                textposition = 'bottom center',
+                hoverinfo = 'none',
                 line = dict(
                     width = 0
                     )
@@ -235,7 +253,8 @@ class BuoySelector():
                 )
 
     def calculateMarkerSizes(self, wvhtPercentiles):
-        markerSizes = wvhtPercentiles // 10 + 6
+        minMarkerSize = 6 
+        markerSizes = wvhtPercentiles // 10 + minMarkerSize 
         return markerSizes
 
     def getMarkerColors(self, swp):
@@ -334,8 +353,9 @@ class BuoySelector():
             name = 'Current Location',
             showlegend = True,
             marker = dict(
-                color = 'rgb(0, 0, 255)',
-                symbol = 'x'
+                color = 'rgb(0, 0, 0)',
+                symbol = 'x',
+                size = 12
                 )
             ))
 
@@ -417,7 +437,9 @@ class BuoySelector():
             yanchor="top",
             xanchor="left",
             y=0.99,
-            x=0.01
+            x=0.01,
+            font = dict(
+                size = 16)
             ))
 
         fig.show()
