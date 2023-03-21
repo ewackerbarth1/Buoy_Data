@@ -20,6 +20,9 @@ conda env create -f CondaInstallEnvironment.yml
 
 ![far buoy](./sample_images/fartherbuoyexample.png)
 
+
+![buoy map](./sample_images/buoymapexample.png)
+
 ## Resources
 NDBC Web Data Guide at:
 https://www.ndbc.noaa.gov/docs/ndbc_web_data_guide.pdf

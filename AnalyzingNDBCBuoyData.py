@@ -1,5 +1,4 @@
 import argparse
-
 from DatabaseInteractor import DatabaseInteractor
 from NDBCBuoy import NDBCBuoy
 from BuoySelector import BuoySelector
@@ -95,7 +94,7 @@ def getBuoyLocations(args):
 
     dbInteractor = DatabaseInteractor() 
     if not dbInteractor.successfulConnection:
-        print('Could not complete data base action because of unsuccessful connection')
+        print('Could not complete database action because of unsuccessful connection')
         return
 
     for stationID in boiList:
@@ -122,7 +121,7 @@ def main():
 
     if args.action == 'update-data':
         if not args.db:
-            print(f'Not using data base so there is no update-data action!')
+            print(f'Not using database so there is no update-data action!')
             return
         addDesiredBuoysToDB(args)
         updateRealtimeData(args)
@@ -131,16 +130,6 @@ def main():
         makeBuoyPicture(args)
     else:
         ValueError('Invalid input for action argument! Valid inputs are: update-data or display-data')
-
-    #buoy1 = NDBCBuoy(args.s)
-    #buoy1.buildRealtimeDataFrame()
-    #buoy1.buildHistoricalDataFrame(args.N)
-    ##buoy1.plotPastNDaysWvht(10)
-    #buoy1.analyzeWVHTDistribution('realtime')
-    #buoy1.analyzeWVHTDistribution('historical')
-    #buoy1.plotWvhtDistribution()
-    ##buoy1.plotWvhtAndPeriodJointDistribution()
-    ##buoy1.plotSwellDirectionDistribution()
 
 if __name__ == "__main__":
     main()
