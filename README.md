@@ -13,6 +13,13 @@ To avoid using a database, set the --db flag to false when running AnalyzingNDBC
 
 conda env create -f CondaInstallEnvironment.yml
 
+## Example Visualizations
+
+![close buoy](./sample_images/closebuoyexample.png)
+
+
+![far buoy](./sample_images/fartherbuoyexample.png)
+
 ## Resources
 NDBC Web Data Guide at:
 https://www.ndbc.noaa.gov/docs/ndbc_web_data_guide.pdf
