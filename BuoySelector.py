@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
+from BuoyDataUtilities import calculateBearingAngle
 from NDBCBuoy import NDBCBuoy
 
 
@@ -141,7 +142,8 @@ class BuoySelector():
             hoverText = f'{stationID}, wvht [m, %rt, %hi]: {thisBuoy.recentWVHT:0.1f}m / {thisBuoy.wvhtPercentileRealtime:0.0f}% / {thisBuoy.wvhtPercentileHistorical:0.0f}%, swp [s]: {thisBuoy.recentSwP}' #{distanceAway:0.2f} NM away'
             thisBuoyData.append(hoverText)
             boiData.append(thisBuoyData)
-            thisBuoy.makeWvhtDistributionPlot(4)
+            bearingAngle = calculateBearingAngle(buoyLatLon, self.currentLoc)  # from buoy to current location in degrees
+            thisBuoy.makeWvhtDistributionPlot(4, bearingAngle)
             
 
         self.buoysDF = pd.DataFrame(boiData, columns=['ID', 'lat', 'lon', 'distanceAway', 'wvht', 'swp', 'swd', 'wvhtPercentileRealtime', 'wvhtPercentileHistorical', 'hoverText'])

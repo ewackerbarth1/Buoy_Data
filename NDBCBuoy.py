@@ -102,11 +102,11 @@ class NDBCBuoy():
         buoyDF = pd.DataFrame(entryList[2:], columns = entryList[0])  # ignore first 2 rows
         return buoyDF
 
-    def checkSamplingPeriod(self, buoyDF):
+    def setSamplingPeriod(self, buoyDF):
         dateSeries = buoyDF['Date']
         expectedInterval = pd.Timedelta(1, unit='hours')
         self.nSampsPerHour = 1
-        thisInterval = dateSeries[1] - dateSeries[0]
+        thisInterval = dateSeries[0] - dateSeries[1]
         if thisInterval != expectedInterval:
             self.nSampsPerHour = round(expectedInterval.value / thisInterval.value)
             print(f'Detected sampling period of {thisInterval} instead of {expectedInterval} for this buoy! Setting self.nSamperPerHour to {self.nSampsPerHour}')
@@ -139,7 +139,7 @@ class NDBCBuoy():
         ndbcPage = self.makeRealtimeDataRequest()
         rawDF = self.parseRealtimeData(ndbcPage)
         self.dataFrameRealtime = self.cleanRealtimeDataFrame(rawDF)
-        self.checkSamplingPeriod(self.dataFrameRealtime)
+        self.setSamplingPeriod(self.dataFrameRealtime)
 
     @staticmethod
     def getHistoricalYearsAndMonths(nYears: int) -> tuple:
@@ -286,7 +286,7 @@ class NDBCBuoy():
         self.setRecentReadings()
         self.setWVHTPercentileHistorical()
         self.setWVHTPercentileRealtime()
-        self.checkSamplingPeriod(self.dataFrameRealtime)
+        self.setSamplingPeriod(self.dataFrameRealtime)
 
     def convertRequestedDaysIntoSamples(self, nDays: int) -> int:
         if nDays > 44:
@@ -360,12 +360,11 @@ class NDBCBuoy():
         return xTicks
 
 
-    def makeWvhtDistributionPlot(self, nDays: int):
+    def makeWvhtDistributionPlot(self, nDays: int, bearingAngle: float):
         nSamples = self.convertRequestedDaysIntoSamples(nDays)
+        print(f'nSamples = {nSamples}')
         waveheights, sampleDates = self.getOrientedWvhtsAndDates(nSamples)
-        #print(f'sampleDates type = {type(sampleDates)}, {type(sampleDates[0])}')
         sampleTimedeltas = self.convertTimestampsToTimedeltas(sampleDates.to_numpy())
-        #print(f'sampleTimedeltas type = {type(sampleTimedeltas)}, {type(sampleTimedeltas[0])}')
 
         rtSamplingVector, rtDist = self.estimateDensityTophatKernel(self.dataFrameRealtime['WVHT'].to_numpy(), 0.5)
         hSamplingVector, hDist = self.estimateDensityTophatKernel(self.dataFrameHistorical['WVHT'].to_numpy(), 0.5)
@@ -395,6 +394,9 @@ class NDBCBuoy():
         ax.legend()
         ax.set_title(f'Station {self.stationID} waveheights')
         ax.grid()
+        ax.text(0.01, 0.95, f'Bearing angle to current loc = {bearingAngle: 0.1f} deg', transform=ax.transAxes, fontsize=10)
+        ax.text(0.01, 0.92, f'Swell direction = {self.recentSwD: 0.1f} deg', transform=ax.transAxes, fontsize=10)
+
 
         #ax2.plot(rtDist, rtSamplingVector, color='darkorange', label='realtime')
         #ax2.plot(hDist, hSamplingVector, color='seagreen', label='historical')

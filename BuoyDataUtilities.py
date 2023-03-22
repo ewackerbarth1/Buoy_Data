@@ -78,3 +78,19 @@ def makeCircularHist(ax, x, bins=16, density=True, offset=0, gaps=True):
 
     return n, bins, patches
 
+def calculateBearingAngle(p1: tuple[float], p2: tuple[float]) -> float:
+    lat1, lon1 = p1
+    lat2, lon2 = p2
+
+    lat1, lon1 = lat1 * np.pi / 180, lon1 * np.pi / 180
+    lat2, lon2 = lat2 * np.pi / 180, lon2 * np.pi / 180
+
+    dLon = lon2 - lon1
+
+    y = np.sin(dLon) * np.cos(lat2)
+    x = np.cos(lat1) * np.sin(lat2) - np.sin(lat1) * np.cos(lat2) * np.cos(dLon)
+
+    brng = np.arctan2(y, x)
+    brng = (brng * 180 / np.pi + 360) % 360
+    return brng
+
