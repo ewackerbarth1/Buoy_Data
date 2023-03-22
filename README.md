@@ -18,6 +18,10 @@ Once the database is configured, use the --db flag to interact with the database
 The ExampleBOI.txt file contains station ID's for a set of NDBC buoys. Navigate to the [NDBC webpage](https://www.ndbc.noaa.gov) and hover over station icons to get their ID's.
 Then build your own BOI text file and point your analysis to it.
 
+Note that there are different types of stations included on the NDBC map.
+Some of them do not have realtime wave measurement capabilities.
+In these cases, you will get an exception stating that there was a 404 status code.
+
 ## Conda Package Manager
 
 `conda env create -f CondaInstallEnvironment.yml`

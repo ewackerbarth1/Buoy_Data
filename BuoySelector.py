@@ -112,7 +112,7 @@ class BuoySelector():
             if self.useDB:
                 fetchSuccess = thisBuoy.fetchDataFromDB()
                 if not fetchSuccess:
-                    print('Unable to fetch data for station {stationID} from database')
+                    print(f'Unable to fetch data for station {stationID} from database')
                     continue
             else:
                 if stationID not in self.activeBuoys:

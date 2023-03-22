@@ -83,6 +83,9 @@ class NDBCBuoy():
         print(f'requesting {self.urlRealtime} after {self.nSecondsToPauseBtwnRequests}s pause...')
         time.sleep(self.nSecondsToPauseBtwnRequests)
         ndbcPage = requests.get(self.urlRealtime)       #<class 'requests.models.Response'>
+        print(f'ndbcPage response for realtime data for station {self.stationID}: {ndbcPage}')
+        if ndbcPage.status_code == 404:
+            raise Exception(f'Could not connect to realtime data server for station {self.stationID}. This data might not exist for this station!')
         return ndbcPage
 
     @staticmethod
@@ -100,17 +103,13 @@ class NDBCBuoy():
         return buoyDF
 
     def checkSamplingPeriod(self, buoyDF):
-        nSamplesToCheck = 10
         dateSeries = buoyDF['Date']
-        dateSeries = dateSeries[:nSamplesToCheck]
         expectedInterval = pd.Timedelta(1, unit='hours')
         self.nSampsPerHour = 1
-
-        for iSample in range(nSamplesToCheck-1):
-            thisInterval = dateSeries[iSample] - dateSeries[iSample+1]
-            if thisInterval != expectedInterval:
-                self.nSampsPerHour = round(expectedInterval.value / thisInterval.value)
-                warnings.warn(f'Detected sampling period of {thisInterval} instead of {expectedInterval} for this buoy! Setting self.nSamperPerHour to {self.nSampsPerHour}')
+        thisInterval = dateSeries[1] - dateSeries[0]
+        if thisInterval != expectedInterval:
+            self.nSampsPerHour = round(expectedInterval.value / thisInterval.value)
+            print(f'Detected sampling period of {thisInterval} instead of {expectedInterval} for this buoy! Setting self.nSamperPerHour to {self.nSampsPerHour}')
 
 
     def cleanRealtimeDataFrame(self, buoyDF):
@@ -241,6 +240,11 @@ class NDBCBuoy():
         dBInteractor = DatabaseInteractor()
         if not dBInteractor.successfulConnection:
             print('Connection failed so we cannot fetch any data')
+            return False
+
+        if not dBInteractor.checkForBuoyExistenceInDB(self.stationID):
+            print(f'station {self.stationID} does not exist in database!')
+            dBInteractor.closeConnection()
             return False
 
         self.setBuoyLocationFromDB(dBInteractor)
