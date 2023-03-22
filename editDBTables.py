@@ -37,7 +37,8 @@ def createRealtimeDataTable(connection):
     connection.cursor().execute('''
         CREATE TABLE realtime_data (
             station_id VARCHAR(255),
-            data MEDIUMTEXT
+            data MEDIUMTEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
 
@@ -49,7 +50,8 @@ def createHistoricalDataTable(connection):
     connection.cursor().execute('''
         CREATE TABLE historical_data (
             station_id VARCHAR(255),
-            data MEDIUMTEXT
+            data MEDIUMTEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
 
