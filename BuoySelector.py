@@ -210,7 +210,7 @@ class BuoySelector():
                 lat = lats,
                 mode = 'lines',
                 name = f'+{swellEta} hrs',
-                hoverinfo = 'name',
+                hoverinfo = 'none',
                 fillcolor = 'rgba(0, 128, 128, 0.1)',
                 fill = 'toself',
                 showlegend = False,
@@ -339,7 +339,7 @@ class BuoySelector():
                 text = f'{thisDir} deg',
                 mode = 'lines',
                 fill = 'toself',
-                hoverinfo = 'text',
+                hoverinfo = 'none',
                 fillcolor = 'rgba(0, 0, 128, 0.7)',
                 showlegend = False,
                 line = dict(
