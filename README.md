@@ -22,9 +22,10 @@ In order to minimize the number of requests made to the NDBC webpage, the analys
 See the editDBTables.py file for the expected table structure and to intialize those tables. 
 Reference the sampleconfig.py file for the variable expected in the database config file and make sure that you import the correct config file!
 
-Once the database is configured, use the --db flag to interact with the database when running the analysis:
+Once the database is configured, we add data to it using the UpdateSwellDB.py script. We use the same script to update the real-time and historical data for our desired stations.
+Here is an example call to UpdateSwellDB.py:
 
-`python AnalyzingNDBCBuoyData.py --bf ExampleBOI.txt --lat 32.96 --lon -117.23 --action display-map --db`
+`python UpdateSwellDB.py --bf ExampleBOI.txt`
 
 ## Example Visualizations
 

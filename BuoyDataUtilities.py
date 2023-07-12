@@ -1,6 +1,49 @@
 # Buoy Utilities
 
 import numpy as np
+import requests
+from bs4 import BeautifulSoup
+
+def parseBOIFile(boiFName: str) -> list:
+    with open(boiFName) as f:
+        stationIDs = f.readlines()
+        boiList = [s.strip() for s in stationIDs]
+
+    print('buoys of interest:')
+    print(boiList)
+    return boiList
+
+def getActiveNDBCStations() -> dict:
+    # get and parse the active stations webpage
+    activeStationsUrl = 'https://www.ndbc.noaa.gov/activestations.xml'
+    ndbcPage = requests.get(activeStationsUrl)       #<class 'requests.models.Response'>
+    buoySoup = BeautifulSoup(ndbcPage.content, 'xml') #<class 'bs4.BeautifulSoup'>
+    
+    # find buoy station types
+    buoyStations = buoySoup.find_all("station") #, {"type": "buoy"})
+    print('# of active buoys = ' + str(len(buoyStations))) # 347 active buoys as of 1/31/2021
+    
+    # build buoy dictionary with id as key and (lat, lon) as value
+    activeBuoys = dict()
+    for buoy in buoyStations:
+        buoyID = buoy.get("id")
+        buoyLon = buoy.get("lon")
+        buoyLat = buoy.get("lat")
+        activeBuoys[buoyID] = (float(buoyLat), float(buoyLon))
+
+    return activeBuoys
+
+def getActiveBOI(boiFName: str) -> dict:
+    boiList = parseBOIFile(boiFName)
+    activeNDBCStations = getActiveNDBCStations()
+    activeBOI = dict()
+    for boi in boiList:
+        if boi not in activeNDBCStations:
+            print(f'station {boi} either does not exist or is not active!')
+        else:
+            activeBOI[boi] = activeNDBCStations[boi]
+
+    return activeBOI
 
 def makeCircularHist(ax, x, bins=16, density=True, offset=0, gaps=True):
     """
