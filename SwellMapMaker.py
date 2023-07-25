@@ -1,112 +1,19 @@
-import requests
-from bs4 import BeautifulSoup
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+import argparse
 
-from BuoyDataUtilities import calculateBearingAngle
 from NDBCBuoy import NDBCBuoy
+from BuoyDataUtilities import calculateBearingAngle, calcDistanceBetweenNM, getActiveBOI, convertSwellETAToDistance, convertDegreesToRadians, convertMetersToNM
 
-
-def convertMetersToNM(d: float) -> float:
-    metersPerNM = 1852
-    return d / metersPerNM
-
-def convertDegreesToRadians(thetaDeg: float) -> float:
-    return thetaDeg * np.pi / 180
-
-def calcDistances(latLon1: tuple, latLon2: tuple) -> float:
-    lat1Rad, lon1Rad = convertDegreesToRadians(latLon1[0]), convertDegreesToRadians(latLon1[1])
-    lat2Rad, lon2Rad = convertDegreesToRadians(latLon2[0]), convertDegreesToRadians(latLon2[1])
-
-    dLat = lat2Rad - lat1Rad
-    dLon = lon2Rad - lon1Rad
-
-    a = np.sin(dLat / 2) * np.sin(dLat / 2) + np.cos(lat1Rad) * np.cos(lat2Rad) * np.sin(dLon / 2) * np.sin(dLon / 2)
-
-    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
-
-    earthRadius = 6371e3   # meters
-    distMeters = earthRadius * c
-
-    #metersPerNMi = 1852
-    #distNMi = distMeters / metersPerNMi# nautical miles
-    distNM = convertMetersToNM(distMeters)
-    return distNM
-
-def convertSwellETAToDistance(swPSeconds: float, etaHours: float) -> float:
-    swellSpeedNMPerHour = 1.5 * swPSeconds  # NM / hour
-    distanceAway = swellSpeedNMPerHour * etaHours # NM
-    return distanceAway
-
-def convertDistanceToSwellETA(swPSeconds: float, stationDistNM: float) -> float:
-    swellSpeedNMPerHour = 1.5 * swPSeconds  # NM / hour
-    etaHours = stationDistNM / swellSpeedNMPerHour # hours
-    return etaHours 
-
-
-class BuoySelector():
-    def __init__(self, currentLoc: tuple, boiFName: str, useDB=True):
+class SwellMapMaker():
+    def __init__(self, currentLoc: tuple, useDB=True):
         self.currentLoc = currentLoc
-        self.boiFName = boiFName
         self.useDB = useDB
 
-        if not self.useDB:
-            self.setActiveBuoys()
-
-        #self.setActiveBuoys()
-        #self.getBuoysOfInterest()
-        #self.activeBuoys
-        #self.activeBOI
-
-    def setActiveBuoys(self):
-
-        # get and parse the active stations webpage
-        activeStationsUrl = 'https://www.ndbc.noaa.gov/activestations.xml'
-        ndbcPage = requests.get(activeStationsUrl)       #<class 'requests.models.Response'>
-        buoySoup = BeautifulSoup(ndbcPage.content, 'xml') #<class 'bs4.BeautifulSoup'>
-
-        # find buoy station types
-        buoyStations = buoySoup.find_all("station") #, {"type": "buoy"})
-        print('# of active buoys = ' + str(len(buoyStations))) # 347 active buoys as of 1/31/2021
-
-        # build buoy dictionary with id as key and (lat, lon) as value
-        self.activeBuoys = dict()
-        for buoy in buoyStations:
-            thisKey = buoy.get("id")
-            thisLon = buoy.get("lon")
-            thisLat = buoy.get("lat")
-            self.activeBuoys[thisKey] = (float(thisLat), float(thisLon))
-
-
-    def parseBOIFile(self) -> list:
-        with open(self.boiFName) as f:
-            stationIDs = f.readlines()
-            boiList = [s.strip() for s in stationIDs]
-
-        print('buoys of interest:')
-        print(boiList)
-        return boiList
-
-    def getActiveBOI(self, attemptedBOI):
-        self.activeBOI = dict()
-        for boi in attemptedBOI:
-            if boi not in self.activeBuoys:
-                print(f'station {boi} either does not exist or is not active!')
-            else:
-                self.activeBOI[boi] = self.activeBuoys[boi]
-
-    def getBuoysOfInterest(self):
-        boiList = self.parseBOIFile()
-        self.getActiveBOI(boiList)
-
-    def getBuoyLocation(self, stationID) -> tuple[float]:
-        return self.activeBuoys[stationID]
-
-    def buildBOIDF(self):
-        boiList = self.parseBOIFile()
+    def buildBOIDF(self, activeBOI: dict):
         boiData = []
-        for stationID in boiList:
+        for stationID, stationLatLon in activeBOI.items():
             print(f'Instantiating NDBCBuoy {stationID}...')
             thisBuoy = NDBCBuoy(stationID)
 
@@ -116,39 +23,56 @@ class BuoySelector():
                     print(f'Unable to fetch data for station {stationID} from database')
                     continue
             else:
-                if stationID not in self.activeBuoys:
-                    print(f'Requested station {stationID} is not active!')
-                    continue
-
-                stationLatLon = self.getBuoyLocation(stationID) 
                 thisBuoy.setLocation(stationLatLon)
                 thisBuoy.fetchDataFromNDBCPage()
 
             thisBuoy.buildAnalysisProducts()
+            distanceAway = calcDistanceBetweenNM(self.currentLoc, stationLatLon)
 
-            buoyLatLon = (thisBuoy.lat, thisBuoy.lon)
-            distanceAway = calcDistances(self.currentLoc, buoyLatLon)
-
-            # set arrival window
-            maxArrivalLag = convertDistanceToSwellETA(12, distanceAway)
-            minArrivalLag = convertDistanceToSwellETA(18, distanceAway)
-            thisBuoy.setArrivalWindow((minArrivalLag, maxArrivalLag))
-
-            buoyInfo = [stationID, buoyLatLon[0], buoyLatLon[1], distanceAway]
+            buoyInfo = [stationID, stationLatLon[0], stationLatLon[1], distanceAway]
             buoyReadings = [thisBuoy.recentWVHT, thisBuoy.recentSwP, thisBuoy.recentSwD, thisBuoy.wvhtPercentileRealtime, thisBuoy.wvhtPercentileHistorical]
+            hoverText = [f'{stationID}, wvht [m, %rt, %hi]: {thisBuoy.recentWVHT:0.1f}m / {thisBuoy.wvhtPercentileRealtime:0.0f}% / {thisBuoy.wvhtPercentileHistorical:0.0f}%, swp [s]: {thisBuoy.recentSwP}'] #{distanceAway:0.2f} NM away'
 
-            thisBuoyData = buoyInfo + buoyReadings
-
-            hoverText = f'{stationID}, wvht [m, %rt, %hi]: {thisBuoy.recentWVHT:0.1f}m / {thisBuoy.wvhtPercentileRealtime:0.0f}% / {thisBuoy.wvhtPercentileHistorical:0.0f}%, swp [s]: {thisBuoy.recentSwP}' #{distanceAway:0.2f} NM away'
-            thisBuoyData.append(hoverText)
+            thisBuoyData = buoyInfo + buoyReadings + hoverText
             boiData.append(thisBuoyData)
-            bearingAngle = calculateBearingAngle(buoyLatLon, self.currentLoc)  # from buoy to current location in degrees
-            thisBuoy.makeWvhtDistributionPlot(4, bearingAngle)
-            
 
         self.buoysDF = pd.DataFrame(boiData, columns=['ID', 'lat', 'lon', 'distanceAway', 'wvht', 'swp', 'swd', 'wvhtPercentileRealtime', 'wvhtPercentileHistorical', 'hoverText'])
         print('Buoys dataframe:')
         print(self.buoysDF)
+
+    def mapBuoys(self):
+        fig = go.Figure(go.Scattergeo())
+
+        fig.update_geos(projection_type="orthographic",
+                showcoastlines = True,
+                showland = True,
+                showocean = True,
+                showlakes = True,
+                resolution = 50, 
+                fitbounds = 'locations'
+                )
+
+        self.plotRangeBands(fig)
+        self.plotSwellDirection(fig)
+        self.plotWaveheightAndPeriodMarkers(fig)
+
+        self.addWvhtsToLegend(fig)
+        self.addSwpToLegend(fig)
+        self.addSwdToLegend(fig)
+
+        self.plotCurrentLocation(fig)
+
+        fig.update_layout(showlegend=True, height=600, margin={"r":0,"t":0,"l":0,"b":0})
+        fig.update_layout(legend=dict(
+            yanchor="top",
+            xanchor="left",
+            y=0.99,
+            x=0.01,
+            font = dict(
+                size = 16)
+            ))
+
+        fig.show()
 
     def generateConstantDistancePoints(self, bearings, distanceAwayNM, lat1Deg, lon1Deg):
         earthRadius = 6371e3   # meters
@@ -412,37 +336,21 @@ class BuoySelector():
             )
 
 
-    def mapBuoys(self):
-        fig = go.Figure(go.Scattergeo())
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--lat", type=float, required=True, help="latitude in degrees")
+    parser.add_argument("--lon", type=float, required=True, help="longitude in degrees")
+    parser.add_argument("--bf", type=str, required=True, help="text file name containing buoys of interest")
+    parser.add_argument("--db", action='store_true', help="use this flag if you are using a MySQL db instance")
 
-        fig.update_geos(projection_type="orthographic",
-                showcoastlines = True,
-                showland = True,
-                showocean = True,
-                showlakes = True,
-                resolution = 50, 
-                fitbounds = 'locations'
-                )
+    args = parser.parse_args()
 
-        self.plotRangeBands(fig)
-        self.plotSwellDirection(fig)
-        self.plotWaveheightAndPeriodMarkers(fig)
+    activeBOI = getActiveBOI(args.bf)
+    currentLoc = (args.lat, args.lon)
+    mapMaker = SwellMapMaker(currentLoc, args.db)
+    mapMaker.buildBOIDF(activeBOI)
+    mapMaker.mapBuoys()
 
-        self.addWvhtsToLegend(fig)
-        self.addSwpToLegend(fig)
-        self.addSwdToLegend(fig)
-
-        self.plotCurrentLocation(fig)
-
-        fig.update_layout(showlegend=True, height=600, margin={"r":0,"t":0,"l":0,"b":0})
-        fig.update_layout(legend=dict(
-            yanchor="top",
-            xanchor="left",
-            y=0.99,
-            x=0.01,
-            font = dict(
-                size = 16)
-            ))
-
-        fig.show()
+if __name__ == "__main__":
+    main()
 

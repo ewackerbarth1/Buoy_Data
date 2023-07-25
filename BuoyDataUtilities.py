@@ -137,3 +137,38 @@ def calculateBearingAngle(p1: tuple[float], p2: tuple[float]) -> float:
     brng = (brng * 180 / np.pi + 360) % 360
     return brng
 
+def convertMetersToNM(d: float) -> float:
+    metersPerNM = 1852
+    return d / metersPerNM
+
+def convertDegreesToRadians(thetaDeg: float) -> float:
+    return thetaDeg * np.pi / 180
+
+def convertSwellETAToDistance(swPSeconds: float, etaHours: float) -> float:
+    swellSpeedNMPerHour = 1.5 * swPSeconds  # NM / hour
+    distanceAway = swellSpeedNMPerHour * etaHours # NM
+    return distanceAway
+
+def convertDistanceToSwellETA(swPSeconds: float, stationDistNM: float) -> float:
+    swellSpeedNMPerHour = 1.5 * swPSeconds  # NM / hour
+    etaHours = stationDistNM / swellSpeedNMPerHour # hours
+    return etaHours 
+
+def calcDistanceBetweenNM(latLon1: tuple, latLon2: tuple) -> float:
+    lat1Rad, lon1Rad = convertDegreesToRadians(latLon1[0]), convertDegreesToRadians(latLon1[1])
+    lat2Rad, lon2Rad = convertDegreesToRadians(latLon2[0]), convertDegreesToRadians(latLon2[1])
+
+    dLat = lat2Rad - lat1Rad
+    dLon = lon2Rad - lon1Rad
+
+    a = np.sin(dLat / 2) * np.sin(dLat / 2) + np.cos(lat1Rad) * np.cos(lat2Rad) * np.sin(dLon / 2) * np.sin(dLon / 2)
+
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+
+    earthRadius = 6371e3   # meters
+    distMeters = earthRadius * c
+
+    #metersPerNMi = 1852
+    #distNMi = distMeters / metersPerNMi# nautical miles
+    distNM = convertMetersToNM(distMeters)
+    return distNM
