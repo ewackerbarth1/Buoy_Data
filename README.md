@@ -39,11 +39,11 @@ Here is an example call to UpdateSwellDB.py:
 
 ## Resources
 
+- [Project Google Doc](https://docs.google.com/document/d/1HXEw0J6tvZzVh7JCB2amuyUP60e3Qw9Z17ZvJnnqDZo/edit?usp=sharing)
+
 - [NDBC home page](https://www.ndbc.noaa.gov)
 
 - [NDBC Web Data Guide](https://www.ndbc.noaa.gov/docs/ndbc_web_data_guide.pdf)
 
 - [Description of Buoy Data](https://www.ndbc.noaa.gov/measdes.shtml#stdmet)
-
-- [Project Google Doc](https://docs.google.com/document/d/1HXEw0J6tvZzVh7JCB2amuyUP60e3Qw9Z17ZvJnnqDZo/edit?usp=sharing)
 

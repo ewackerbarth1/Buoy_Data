@@ -3,7 +3,7 @@ from DatabaseInteractor import DatabaseInteractor
 from NDBCBuoy import NDBCBuoy
 from BuoyDataUtilities import getActiveBOI
 
-def updateRealtimeData(activeBOI):
+def updateRealtimeData(activeBOI: dict):
     dbInteractor = DatabaseInteractor() 
     if not dbInteractor.successfulConnection:
         raise Exception("Unsuccessful attempt to connect to database")
@@ -16,12 +16,19 @@ def updateRealtimeData(activeBOI):
 
         # if buoy is in stations table, then check whether the current data is outdated
         if not dbInteractor.isItTimeToUpdateRealtimeData(stationID):
-            print(f'realtime data for {stationID} is still current!')
+            print(f'realtime data for {stationID} is still current')
             continue
 
         # if time for update, then request current data from NOAA
         thisBuoy = NDBCBuoy(stationID)
-        thisBuoy.buildRealtimeDataFrame()
+        try:
+            thisBuoy.buildRealtimeDataFrame()
+        except Exception as e:
+            print('-------')
+            print(f'EXCEPTION: {e}')
+            print('-------')
+            print(f'Failed to build realtime data frame for station {stationID}!!!')
+            continue
 
         # add realtime data set to realtime_data table
         dbInteractor.updateRealtimeDataEntry(stationID, thisBuoy.dataFrameRealtime)
@@ -41,7 +48,7 @@ def updateHistoricalData(activeBOI: dict):
 
         # if it is, check whether it's time to update the historical data
         if not dbInteractor.isItTimeToUpdateHistoricalData(stationID):
-            print(f'historical data for {stationID} is still applicable!')
+            print(f'historical data for {stationID} is still applicable')
             continue
 
         # if it's time to update, then get historical data set for the buoy
@@ -60,7 +67,7 @@ def addDesiredBuoysToDB(activeBOI: dict):
 
     for stationID, latLon in activeBOI.items():
         if dbInteractor.checkForBuoyExistenceInDB(stationID):
-            print(f'station {stationID} is already in the database!')
+            print(f'station {stationID} is already in the database')
         else:
             print(f'adding station {stationID} to database...')
             dbInteractor.addBuoyToStationsTable(stationID, latLon)
