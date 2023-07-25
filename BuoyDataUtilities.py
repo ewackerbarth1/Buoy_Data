@@ -172,3 +172,30 @@ def calcDistanceBetweenNM(latLon1: tuple, latLon2: tuple) -> float:
     #distNMi = distMeters / metersPerNMi# nautical miles
     distNM = convertMetersToNM(distMeters)
     return distNM
+
+def estimateDensityGaussianKernel(data: np.ndarray[np.float64]) -> tuple:
+    xd = np.linspace(0, max(data), 100)
+    density = sum(norm(xi).pdf(xd) for xi in data)
+    density = density / (sum(density) * (xd[1]-xd[0]))
+    return xd, density
+
+def estimateDensityTophatKernel(data: np.ndarray[np.float64], binWidth: float) -> tuple:
+    xd = np.linspace(0, max(data), 100)
+    density = np.zeros(xd.shape)
+    for xi in data:
+        densityIdxs = abs(xi - xd) < 0.5*binWidth
+        density[densityIdxs] += 1
+
+    density = density / (sum(density) * (xd[1] - xd[0]))
+    return xd, density
+
+def getNthPercentileSample(samplingVector: np.ndarray[np.float64], pmf: np.ndarray[np.float64], nthPercentile: float) -> np.float64:
+    mass = 0
+    sampleIdx = 0
+    samplingBinWidth = samplingVector[1] - samplingVector[0]
+    while mass < nthPercentile / 100 and sampleIdx < len(samplingVector):
+        mass += pmf[sampleIdx] * samplingBinWidth
+        sampleIdx += 1
+
+    return samplingVector[sampleIdx]
+

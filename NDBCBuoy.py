@@ -295,123 +295,13 @@ class NDBCBuoy():
         nSamples = 24 * self.nSampsPerHour * nDays   
         return nSamples
 
-    def getOrientedWvhtsAndDates(self, nSamples: int) -> tuple[pd.Series]:
-        waveheights = self.dataFrameRealtime['WVHT']
-        sampleDates = self.dataFrameRealtime['Date']
-        waveheights = waveheights[:nSamples]
-        sampleDates = sampleDates[:nSamples]
-        waveheights = waveheights[::-1]  # reverse so that the most recent sample is the last array value
-        sampleDates = sampleDates[::-1]
-        return waveheights, sampleDates
-    
-    @staticmethod
-    def estimateDensityGaussianKernel(data: np.ndarray[np.float64]) -> tuple:
-        xd = np.linspace(0, max(data), 100)
-        density = sum(norm(xi).pdf(xd) for xi in data)
-        density = density / (sum(density) * (xd[1]-xd[0]))
-        return xd, density
+    def getOrientedWvhtsAndDates(self, nSamples: int) -> tuple:
+        # reverse so that the most recent sample is the last array value
+        def truncateAndReverse(dataSeries: np.ndarray) -> np.ndarray:
+            truncated = dataSeries[:nSamples]
+            return truncated[::-1]
 
-    @staticmethod
-    def estimateDensityTophatKernel(data: np.ndarray[np.float64], binWidth: float) -> tuple:
-        xd = np.linspace(0, max(data), 100)
-        density = np.zeros(xd.shape)
-        for xi in data:
-            densityIdxs = abs(xi - xd) < 0.5*binWidth
-            density[densityIdxs] += 1
-    
-        density = density / (sum(density) * (xd[1] - xd[0]))
-        return xd, density
-
-    @staticmethod
-    def getNthPercentileSample(samplingVector: np.ndarray[np.float64], pmf: np.ndarray[np.float64], nthPercentile: float) -> np.float64:
-        mass = 0
-        sampleIdx = 0
-        samplingBinWidth = samplingVector[1] - samplingVector[0]
-        while mass < nthPercentile / 100 and sampleIdx < len(samplingVector):
-            mass += pmf[sampleIdx] * samplingBinWidth
-            sampleIdx += 1
-
-        return samplingVector[sampleIdx]
-    
-    @staticmethod
-    def convertTimestampsToTimedeltas(timestamps: np.ndarray[np.datetime64]) -> np.ndarray[np.float64]:
-        now = np.datetime64('now')
-        deltas = now - timestamps
-        deltas = deltas.astype('timedelta64[h]')
-        deltas = -1 * deltas.astype('float')
-        return deltas
-
-    @staticmethod
-    def getXTicksForTimeDeltas(timeDeltas: np.ndarray[np.float64]) -> list[float]:
-        minTimeDelta = min(timeDeltas)
-        xTicks = []
-        q, r = divmod(int(minTimeDelta), 24)
-        nTicks = -1 * q
-        if r == 0:
-            nTicks += 1
-            tickValue = q * 24
-        else:
-            tickValue = (q + 1) * 24
-
-        for iTick in range(nTicks):
-            xTicks.append(tickValue)
-            tickValue += 24
-
-        return xTicks
-
-
-    def makeWvhtDistributionPlot(self, nDays: int, bearingAngle: float):
-        nSamples = self.convertRequestedDaysIntoSamples(nDays)
-        print(f'nSamples = {nSamples}')
-        waveheights, sampleDates = self.getOrientedWvhtsAndDates(nSamples)
-        sampleTimedeltas = self.convertTimestampsToTimedeltas(sampleDates.to_numpy())
-
-        rtSamplingVector, rtDist = self.estimateDensityTophatKernel(self.dataFrameRealtime['WVHT'].to_numpy(), 0.5)
-        hSamplingVector, hDist = self.estimateDensityTophatKernel(self.dataFrameHistorical['WVHT'].to_numpy(), 0.5)
-
-        h50thPercentileWvht = self.getNthPercentileSample(hSamplingVector, hDist, 50)
-        h90thPercentileWvht = self.getNthPercentileSample(hSamplingVector, hDist, 90)
-        print(f'50th percentile wvht for station {self.stationID} = {h50thPercentileWvht: 0.2f} m')
-        print(f'90th percentile wvht for station {self.stationID} = {h90thPercentileWvht: 0.2f} m')
-
-        print(f'min time lag = {self.arrivalWindow[0]: 0.2f}hrs, max time lag = {self.arrivalWindow[1]: 0.2f}hrs')
-        arrivalWindow = [-1 * x for x in self.arrivalWindow]
-
-        fig = plt.figure(figsize=(13, 7))
-        ax = fig.add_gridspec(top=0.95, right=0.75).subplots()
-        ax2 = ax.inset_axes([1.05, 0, 0.25, 1], sharey=ax)
-        
-        ax.plot(sampleTimedeltas, waveheights, 'o-', color='royalblue', label='wvht')
-        xMin, xMax = min(sampleTimedeltas), max(sampleTimedeltas)
-        print(f'min time delta = {xMin}, max time delta = {xMax}')
-        ax.hlines(h50thPercentileWvht, xMin, xMax, color='seagreen', ls=':', alpha=0.9, label='50th %')
-        ax.hlines(h90thPercentileWvht, xMin, xMax, color='seagreen', ls='--', alpha=0.9, label='90th %')
-        ax.fill_betweenx([min(waveheights), max(waveheights)], arrivalWindow[1], arrivalWindow[0], color='darkblue', alpha=0.4, label='currently arriving')
-        ax.set_ylabel('Wave height [m]')
-        ax.set_xlabel('Sample time deltas [hrs]')
-        ax.set_xticks(self.getXTicksForTimeDeltas(sampleTimedeltas))
-        #ax.tick_params(axis='x', labelrotation=45, labelsize=7)
-        ax.legend()
-        ax.set_title(f'Station {self.stationID} waveheights')
-        ax.grid()
-        ax.text(0.01, 0.95, f'Bearing angle to current loc = {bearingAngle: 0.1f} deg', transform=ax.transAxes, fontsize=10)
-        ax.text(0.01, 0.92, f'Swell direction = {self.recentSwD: 0.1f} deg', transform=ax.transAxes, fontsize=10)
-
-
-        #ax2.plot(rtDist, rtSamplingVector, color='darkorange', label='realtime')
-        #ax2.plot(hDist, hSamplingVector, color='seagreen', label='historical')
-        ax2.fill_betweenx(rtSamplingVector, rtDist, 0, color='darkorange', alpha = 0.7, label='realtime')
-        ax2.fill_betweenx(hSamplingVector, hDist, 0, color='seagreen', alpha = 0.7, label='historical')
-        ax2.tick_params(axis='y', labelleft=False)
-        ax2.legend(loc='upper left')
-        xMin, xMax = ax2.get_xlim()
-        ax2.set_xlim((xMax, xMin))
-        ax2.set_xlabel('Density')
-        ax2.grid()
-        #manager = plt.get_current_fig_manager()
-        #manager.full_screen_toggle()
-        plt.savefig(f'station_{self.stationID}.png', format='png')
-        #plt.show()
+        return truncateAndReverse(self.dataFrameRealtime['WVHT'].to_numpy()), truncateAndReverse(self.dataFrameRealtime['Date'].to_numpy())
 
     def plotPastNDaysWvht(self, nDays: int):
         nSamples = self.convertRequestedDaysIntoSamples(nDays)
