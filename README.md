@@ -5,7 +5,18 @@
 
 ## Example Usage
 
-`python AnalyzingNDBCBuoyData.py --bf ExampleBOI.txt --lat 32.96 --lon -117.23 --action display-map`
+There are a few scripts which produce helpful visuals. 
+First, we can run SwellMapMaker.py to produce a map of the desired buoys containing various metrics on the current swell readings (see "Example Visualizations"). 
+An example call to this script looks like:
+
+`python SwellMapMaker.py --bf ExampleBOI.txt --lat 32.96 --lon -117.23`
+
+We can also run PlotWvhtDistributions.py to look at how recent wave height measurements compare to an estimate of the historical distribution (see "Example Visualizations").
+An example call to this script looks similar:
+
+`python PlotWvhtDistributions.py --bf ExampleBOI.txt --lat 32.96 --lon -117.23`
+
+Note that you can use the `--show` flag to display the plots instead of saving them in the code directory.
 
 ## Choosing Buoys of Interest
 
@@ -26,6 +37,12 @@ Once the database is configured, we add data to it using the UpdateSwellDB.py sc
 Here is an example call to UpdateSwellDB.py:
 
 `python UpdateSwellDB.py --bf ExampleBOI.txt`
+
+Provided the database is updated, we can set the `--db` flag on our analysis scripts in order to query the database for station data instead of the NDBC webpage. 
+For example:
+
+`python PlotWvhtDistributions.py --bf ExampleBOI.txt --lat 32.96 --lon -117.23 --db`
+
 
 ## Example Visualizations
 

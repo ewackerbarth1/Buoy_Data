@@ -39,7 +39,6 @@ class NDBCBuoy():
         self.recentSwD = -1.0
         self.wvhtPercentileHistorical = -1.0
         self.wvhtPercentileRealtime = -1.0
-        self.arrivalWindow = []
 
     @staticmethod
     def buildSwellDirDict() -> dict:
@@ -64,9 +63,6 @@ class NDBCBuoy():
             iCount = iCount + 1
     
         return swellDirDict
-
-    def setArrivalWindow(self, arrivalWindow: tuple[float]):
-        self.arrivalWindow = arrivalWindow
 
     def buildStationURLs(self) -> str:
         urlRealtime = f'{self.baseURLRealtime}{self.stationID}.spec'
