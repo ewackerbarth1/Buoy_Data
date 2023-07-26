@@ -18,6 +18,13 @@ An example call to this script looks similar:
 
 Note that you can use the `--show` flag to display the plots instead of saving them in the code directory.
 
+## Visualizing Historical Measurements
+
+A few of the included analysis scripts focus solely on illustrating the historical measurements at a particular station.
+For instance, PlotHistoricalWvhts.py produces a time series of different percentile wave heights for each month:
+
+`python PlotHistoricalWvhts.py --bf ExampleBOI.txt --nYears 5 --show`
+
 ## Choosing Buoys of Interest
 
 The ExampleBOI.txt file contains station ID's for a set of NDBC buoys. Navigate to the [NDBC webpage](https://www.ndbc.noaa.gov) and hover over station icons to get their ID's.

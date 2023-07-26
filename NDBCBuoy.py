@@ -26,6 +26,7 @@ class NDBCBuoy():
         self.swellDict = self.buildSwellDirDict()
         self.urlRealtime = self.buildStationURLs()
         self.nYearsBack = 5   # number of years to go back for historical analysis
+        self.nHistoricalMonths = 3 # number of months in historical data range
         self.nSecondsToPauseBtwnRequests = 5
 
         # default values
@@ -136,21 +137,22 @@ class NDBCBuoy():
         rawDF = self.parseRealtimeData(ndbcPage)
         self.dataFrameRealtime = self.cleanRealtimeDataFrame(rawDF)
         self.setSamplingPeriod(self.dataFrameRealtime)
-
-    @staticmethod
-    def getHistoricalYearsAndMonths(nYears: int) -> tuple:
+    
+    def getHistoricalYears(self, nYears: int) -> list:
         todaysDate = date.today()
-        currentYear, currentMonth = todaysDate.year, todaysDate.month
-        monthsList = []
-        # need to get data from prior month, this month, next month
-        for dMonth in range(-1, 2):
-            monthsList.append((currentMonth + dMonth) % 12)
+        currentYear = todaysDate.year
+        return list(range(currentYear - nYears, currentYear))
 
-        yearsList = []
-        for dYear in range(1, nYears+1):
-            yearsList.append(currentYear - dYear)
+    def getHistoricalMonths(self, nMonths: int) -> list:
+        # months need to be in [1, 12]
+        todaysDate = date.today()
+        currentMonth = todaysDate.month
+        nBackMonths = (nMonths - 1) // 2
+        nForwardMonths = (nMonths - 1) // 2
+        if nMonths % 2 == 0:
+            nForwardMonths += 1
 
-        return yearsList, monthsList
+        return [(currentMonth + dMonth - 1) % 12 + 1 for dMonth in range(-nBackMonths, nForwardMonths+1)]
 
     @staticmethod
     def parseHistoricalData(ndbcPage, monthsToCheck: list[int]):
@@ -168,11 +170,7 @@ class NDBCBuoy():
 
         # remove every element that doesn't have waveheight data
         rowsToRemove = buoyDF.loc[buoyDF['WVHT'] == '99.00']
-        #print(f'# of rows to remove = {len(rowsToRemove)}')
-        #print(f'rows to remove = {rowsToRemove}')
         buoyDF = buoyDF.drop(rowsToRemove.index)
-        #print(f'Parsed data frame:')
-        #print(buoyDF)
 
         # remove elements not in correct months
         monthsToCheckStrs = []
@@ -201,9 +199,10 @@ class NDBCBuoy():
         return buoyDF
 
     def buildHistoricalDataFrame(self):
-        yearsToCheck, monthsToCheck = self.getHistoricalYearsAndMonths(self.nYearsBack)
+        yearsToCheck = self.getHistoricalYears(self.nYearsBack)
+        monthsToCheck = self.getHistoricalMonths(self.nHistoricalMonths)
         print(f'Grabbing historical data from years of {yearsToCheck} and months {monthsToCheck}')
-        print(f'To limit requests to NDBC webpage, collecting {len(yearsToCheck)} years of historical data will take us about {len(yearsToCheck)*5}s')
+        print(f'To limit requests to NDBC webpage, collecting {self.nYearsBack} years of historical data will take us about {self.nYearsBack * self.nSecondsToPauseBtwnRequests}s')
         historicalDataFrames = []
         for yearToCheck in yearsToCheck:
             ndbcPage = self.makeHistoricalDataRequest(yearToCheck)
