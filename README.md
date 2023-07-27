@@ -23,7 +23,7 @@ Note that you can use the `--show` flag to display the plots instead of saving t
 A few of the included analysis scripts focus solely on illustrating the historical measurements at a particular station.
 For instance, PlotHistoricalWvhts.py produces a time series of different percentile wave heights for each month:
 
-`python PlotHistoricalWvhts.py --bf ExampleBOI.txt --nYears 5 --show`
+`python PlotHistoricalWvhts.py --bf ExampleBOI.txt --nYears 3 --show --minPeriod 12.0`
 
 ## Choosing Buoys of Interest
 
