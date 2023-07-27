@@ -3,6 +3,7 @@
 import numpy as np
 import requests
 from bs4 import BeautifulSoup
+import pandas as pd
 
 def parseBOIFile(boiFName: str) -> list:
     with open(boiFName) as f:
@@ -199,3 +200,5 @@ def getNthPercentileSample(samplingVector: np.ndarray[np.float64], pmf: np.ndarr
 
     return samplingVector[sampleIdx]
 
+def getMonthlyDF(df: pd.core.frame.DataFrame, month: int) -> pd.core.frame.DataFrame:
+    return df[df['Date'].dt.month == month]

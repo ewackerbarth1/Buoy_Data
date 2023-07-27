@@ -1,12 +1,9 @@
 import argparse
-from BuoyDataUtilities import getActiveBOI
+from BuoyDataUtilities import getActiveBOI, getMonthlyDF
 from NDBCBuoy import NDBCBuoy
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-
-def getMonthlyDF(df: pd.core.frame.DataFrame, month: int) -> pd.core.frame.DataFrame:
-    return df[df['Date'].dt.month == month]
 
 def getDataThatMetPeriodThresholds(df: pd.core.frame.DataFrame, minPeriod: float) -> tuple[pd.core.frame.DataFrame, float]:
     metThresholdData = df[df['DPD'] >= minPeriod]
