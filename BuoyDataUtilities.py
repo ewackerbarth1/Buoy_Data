@@ -46,7 +46,7 @@ def getActiveBOI(boiFName: str) -> dict:
 
     return activeBOI
 
-def makeCircularHist(ax, x, bins=16, density=True, offset=0, gaps=True):
+def makeCircularHist(ax, x, bins=16, density=True, offset=0, gaps=True) -> tuple:
     """
     Produce a circular histogram of angles on ax.
     copied from https://stackoverflow.com/questions/22562364/circular-polar-histogram-in-python

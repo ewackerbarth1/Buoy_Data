@@ -4,6 +4,7 @@ from NDBCBuoy import NDBCBuoy
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+from HistoricalAnalysisUtilities import getCompleteHistoricalDataFrame
 
 def getPeriodSamples(df: pd.core.frame.DataFrame, month: int, wvhtPercentile: float) -> np.ndarray:
     monthDF = getMonthlyDF(df, month)
@@ -37,13 +38,8 @@ def plotPeriodDist(periodSamples: np.ndarray, stationID: str, showPlot: bool, mi
 
 def makePeriodDistributionPlots(activeBOI: dict, args: argparse.Namespace):
     for stationID in activeBOI:
-        thisBuoy = NDBCBuoy(stationID)
-        thisBuoy.nYearsBack = args.nYears
-        thisBuoy.nHistoricalMonths = 12
-        thisBuoy.buildHistoricalDataFrame()
-
-        periodSamples = getPeriodSamples(thisBuoy.dataFrameHistorical, args.month, args.wvhtPercentile)
-
+        historicalDF = getCompleteHistoricalDataFrame(NDBCBuoy(stationID), args.nYears)
+        periodSamples = getPeriodSamples(historicalDF, args.month, args.wvhtPercentile)
         plotPeriodDist(periodSamples, stationID, args.show, args.minPeriod, args.wvhtPercentile, args.month)
 
 def main():
