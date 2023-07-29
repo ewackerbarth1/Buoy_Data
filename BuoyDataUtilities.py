@@ -200,5 +200,16 @@ def getNthPercentileSample(samplingVector: np.ndarray[np.float64], pmf: np.ndarr
 
     return samplingVector[sampleIdx]
 
+def getNthPercentileSampleWithoutPMF(wvhts: np.ndarray, nthPercentile: int) -> np.float64:
+    nSamples = len(wvhts)
+    ithSample = int(np.ceil(nthPercentile / 100 * nSamples) - 1)
+    sortedWvhts = np.sort(wvhts)
+    return sortedWvhts[ithSample]
+
 def getMonthlyDF(df: pd.core.frame.DataFrame, month: int) -> pd.core.frame.DataFrame:
     return df[df['Date'].dt.month == month]
+
+def getMonthName(month: int) -> str:
+    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    return months[month-1]
+

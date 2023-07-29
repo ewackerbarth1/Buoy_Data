@@ -1,19 +1,13 @@
 import argparse
-from BuoyDataUtilities import getActiveBOI, getMonthlyDF, estimateDensityTophatKernel
+from BuoyDataUtilities import getActiveBOI, getMonthlyDF, estimateDensityTophatKernel, getNthPercentileSampleWithoutPMF, getMonthName
 from NDBCBuoy import NDBCBuoy
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
-def getPercentileSample(wvhts: np.ndarray, nthPercentile: int) -> np.float64:
-    nSamples = len(wvhts)
-    ithSample = int(np.ceil(nthPercentile / 100 * nSamples) - 1)
-    sortedWvhts = np.sort(wvhts)
-    return sortedWvhts[ithSample]
-
 def getPeriodSamples(df: pd.core.frame.DataFrame, month: int, wvhtPercentile: float) -> np.ndarray:
     monthDF = getMonthlyDF(df, month)
-    wvht = getPercentileSample(monthDF['WVHT'].to_numpy(), wvhtPercentile)
+    wvht = getNthPercentileSampleWithoutPMF(monthDF['WVHT'].to_numpy(), wvhtPercentile)
     metWvhtThreshold = monthDF[monthDF['WVHT'] >= wvht]
     print(f'Percentage of samples above {wvhtPercentile}th percentile = {len(metWvhtThreshold) / len(monthDF) * 100:.2f} %')
     return metWvhtThreshold['DPD'].to_numpy()
@@ -23,13 +17,11 @@ def plotPeriodDist(periodSamples: np.ndarray, stationID: str, showPlot: bool, mi
     periodSampleBinWidth = 1.0 
     samplesVector, periodDist = estimateDensityTophatKernel(periodSamples, periodSampleBinWidth)
 
-    monthDict = {1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun', 7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec'}
-
     fig, ax = plt.subplots()
     ax.fill_between(samplesVector, periodDist, color='seagreen', zorder=2)
     yMin, yMax = ax.get_ylim()
     ax.vlines(minPeriod, 0, yMax, color='black', ls=':', alpha=0.8, label=f'{minPeriod} s', zorder=3)
-    ax.set_title(f'Station {stationID} period dist for samples above {wvhtPercentile}% wvht in {monthDict[month]}')
+    ax.set_title(f'Station {stationID} period dist for samples above {wvhtPercentile}% wvht in {getMonthName(month)}')
     ax.set_xlabel('swell period [s]')
     ax.set_ylabel('pdf')
     ax.grid(zorder=1)
