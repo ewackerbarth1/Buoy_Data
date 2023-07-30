@@ -3,12 +3,9 @@ from bs4 import BeautifulSoup
 from scipy.stats import norm
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import re
-import warnings
 import time
 from datetime import date, datetime, timedelta
-from BuoyDataUtilities import makeCircularHist
 from DatabaseInteractor import DatabaseInteractor
 
 
@@ -297,54 +294,4 @@ class NDBCBuoy():
             return truncated[::-1]
 
         return truncateAndReverse(self.dataFrameRealtime['WVHT'].to_numpy()), truncateAndReverse(self.dataFrameRealtime['Date'].to_numpy())
-
-    def plotPastNDaysWvht(self, nDays: int):
-        nSamples = self.convertRequestedDaysIntoSamples(nDays)
-        waveheights, sampleDates = self.getOrientedWvhtsAndDates(nSamples)
-
-        plt.plot(sampleDates, waveheights, 'o-')
-        plt.xlabel('Sample times')
-        plt.ylabel('Wave height [m]')
-        plt.title(f'{nDays}-day trailing window of wave heights for station {self.stationID}')
-        plt.grid()
-        plt.gca().tick_params(axis='x', labelrotation=45)
-        plt.show()
-
-    def plotWvhtDistribution(self):
-        nSamplesToLayerOn = 3   # most recent n samples to plot
-        waveheightsRT = self.dataFrameRealtime['WVHT']
-        waveheightsHistorical = self.dataFrameHistorical['WVHT']
-        plt.hist(waveheightsHistorical, density=True)
-        plt.plot(waveheightsRT[0:nSamplesToLayerOn], np.full_like(waveheightsRT[0:nSamplesToLayerOn], -0.05), '|k', markeredgewidth=1)
-        plt.grid()
-        plt.xlabel('Wave heights [m]')
-        plt.ylabel('density')
-        plt.title(f'Wave heights pmf for station {self.stationID}')
-        plt.show()
-
-    def plotWvhtAndPeriodJointDistribution(self):
-        nSamplesToLayerOn = 3   # most recent n samples to plot
-        waveheights = self.dataFrameRealtime['WVHT']
-        swellPeriods = self.dataFrameRealtime['SwP']
-        plt.hist2d(waveheights, swellPeriods, density=True)
-        plt.plot(waveheights[0:nSamplesToLayerOn], swellPeriods[0:nSamplesToLayerOn], 'wo')
-        plt.grid()
-        plt.xlabel('Wave heights [m]')
-        plt.ylabel('Swell periods [s]')
-        plt.title(f'wvht and swp joint pmf for station {self.stationID}')
-        plt.show()
-
-    def plotSwellDirectionDistribution(self):
-        nSamplesToLayerOn = 3   # most recent n samples to plot
-        swellDirections = self.dataFrameRealtime['SwD']
-        swellDirectionsRadians = swellDirections * (np.pi / 180)
-
-        # Visualise by area of bins
-        fig, ax = plt.subplots(subplot_kw=dict(projection='polar'))
-        makeCircularHist(ax, swellDirectionsRadians)
-        ax.plot(swellDirections[0:nSamplesToLayerOn], np.full_like(swellDirections[0:nSamplesToLayerOn], 0.2), 'ok', markeredgewidth=1)
-        ax.set_title(f'Swell direction distribution for station {self.stationID}')
-        ax.grid(True)
-        ax.set_xticklabels(['N', 'NW', 'W', 'SW', 'S', 'SE', 'E', 'NE'])   #TODO: this produces a warning!!
-        plt.show()
 
