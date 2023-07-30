@@ -9,7 +9,7 @@ from HistoricalAnalysisUtilities import getCompleteHistoricalDataFrame
 def getSwellDirs(df: pd.core.frame.DataFrame, month: int, minPeriod: float, minWvht: float) -> np.ndarray:
     monthDF = getMonthlyDF(df, month)
     goodSamples = monthDF[(monthDF['DPD'] >= minPeriod) & (monthDF['WVHT'] >= minWvht)]
-    print(f'% of samples that passed filtering = {len(goodSamples) / len(monthDF) * 100}%')
+    print(f'% of samples that passed filtering = {len(goodSamples) / len(monthDF) * 100:.1f}%')
     swellDirs = goodSamples['MWD'].to_numpy()
     return swellDirs
 
@@ -25,7 +25,7 @@ def plotDirDistribution(swellDirs: np.ndarray, stationID: str, month: int, showP
     ax.set_xticks(np.linspace(0, 2*np.pi, 8, endpoint=False))
     ax.set_xticklabels(['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'])
 
-    # text stating minWvht, minPeriod
+    # TODO: text stating minWvht, minPeriod
     if showPlot:
         plt.show()
     else:
