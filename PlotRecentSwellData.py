@@ -3,6 +3,7 @@ from BuoyDataUtilities import getActiveBOI
 from NDBCBuoy import NDBCBuoy
 import numpy as np
 import matplotlib.pyplot as plt
+import traceback
 
 def truncateAndReverse(dataSeries: np.ndarray, nSamples: int) -> np.ndarray:
     truncated = dataSeries[:nSamples]
@@ -66,8 +67,11 @@ def makeRecentPlots(activeBOI: dict, useDB: bool, nDays: int, showPlots: bool):
     for stationID in activeBOI:
         try:
             dates, wvhts, swp, swd = getRecentSwellData(NDBCBuoy(stationID), useDB, nDays)
-        except e:
-            print(f'Exception: {e}')
+        except Exception as e:
+            print(f'---------')
+            print(f'EXCEPTION: {e}')
+            traceback.print_exc()
+            print(f'---------')
             continue
 
         plotRecentData(dates, wvhts, swp, swd, stationID, showPlots)

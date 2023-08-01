@@ -27,7 +27,7 @@ class NDBCBuoy():
         self.nSecondsToPauseBtwnRequests = 5
 
         # default values
-        self.nSampsPerHour = -1
+        self.nSampsPerHour = None #-1
         self.dataFrameRealtime = []
         self.dataFrameHistorical = []
         self.lat = 0.0
