@@ -9,12 +9,12 @@ There are a few scripts which produce helpful visuals.
 First, we can run SwellMapMaker.py to produce a map of the desired buoys containing various metrics on the current swell readings (see "Example Visualizations"). 
 An example call to this script looks like:
 
-`python SwellMapMaker.py --bf ExampleBOI.txt --lat 32.96 --lon -117.23`
+`python SwellMapMaker.py --bf buoy_files\ExampleBOI.txt --lat 32.96 --lon -117.23`
 
 We can also run PlotWvhtDistributions.py to look at how recent wave height measurements compare to an estimate of the historical distribution (see "Example Visualizations").
 An example call to this script looks similar:
 
-`python PlotWvhtDistributions.py --bf ExampleBOI.txt --lat 32.96 --lon -117.23`
+`python PlotWvhtDistributions.py --bf buoy_files\ExampleBOI.txt --lat 32.96 --lon -117.23`
 
 Note that you can use the `--show` flag to display the plots instead of saving them in the code directory.
 
@@ -23,11 +23,11 @@ Note that you can use the `--show` flag to display the plots instead of saving t
 A few of the included analysis scripts focus solely on illustrating the historical measurements at a particular station.
 For instance, PlotHistoricalWvhts.py produces a time series of different percentile wave heights for each month:
 
-`python PlotHistoricalWvhts.py --bf ExampleBOI.txt --nYears 3 --show --minPeriod 12.0`
+`python PlotHistoricalWvhts.py --bf buoy_files\ExampleBOI.txt --nYears 3 --show --minPeriod 12.0`
 
 ## Choosing Buoys of Interest
 
-The ExampleBOI.txt file contains station ID's for a set of NDBC buoys. Navigate to the [NDBC webpage](https://www.ndbc.noaa.gov) and hover over station icons to get their ID's.
+The ExampleBOI.txt file in the buoy_files folder contains station ID's for a set of NDBC buoys. Navigate to the [NDBC webpage](https://www.ndbc.noaa.gov) and hover over station icons to get their ID's.
 Then build your own BOI text file and point your analysis to it.
 
 Note that there are different types of stations included on the NDBC map.
@@ -43,12 +43,12 @@ Reference the sampleconfig.py file for the variable expected in the database con
 Once the database is configured, we add data to it using the UpdateSwellDB.py script. We use the same script to update the real-time and historical data for our desired stations.
 Here is an example call to UpdateSwellDB.py:
 
-`python UpdateSwellDB.py --bf ExampleBOI.txt`
+`python UpdateSwellDB.py --bf buoy_files\ExampleBOI.txt`
 
 Provided the database is updated, we can set the `--db` flag on our analysis scripts in order to query the database for station data instead of the NDBC webpage. 
 For example:
 
-`python PlotWvhtDistributions.py --bf ExampleBOI.txt --lat 32.96 --lon -117.23 --db`
+`python PlotWvhtDistributions.py --bf buoy_files\ExampleBOI.txt --lat 32.96 --lon -117.23 --db`
 
 
 ## Example Visualizations
