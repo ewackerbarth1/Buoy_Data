@@ -53,11 +53,9 @@ For example:
 
 ## Example Visualizations
 
-![close buoy](./sample_images/closebuoyexample.png)
-
-
 ![far buoy](./sample_images/fartherbuoyexample.png)
 
+![swell dirs](./sample_images/station_46259_swelldirs.png)
 
 ![buoy map](./sample_images/buoymapexample.png)
 
