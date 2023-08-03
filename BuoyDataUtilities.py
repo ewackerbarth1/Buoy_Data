@@ -141,7 +141,7 @@ def truncateAndReverse(dataSeries: np.ndarray, nSamples: int) -> np.ndarray:
     truncated = dataSeries[:nSamples]
     return truncated[::-1]
 
-def restricted_int(x):
+def restricted_nDays_int(x):
     x = int(x)
     if x < 1 or x > 44:
         raise argparse.ArgumentTypeError(f"Value must be an integer between 1 and 44. Got {x}")

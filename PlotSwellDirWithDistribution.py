@@ -1,5 +1,5 @@
 import argparse
-from BuoyDataUtilities import getActiveBOI, truncateAndReverse, restricted_int
+from BuoyDataUtilities import getActiveBOI, truncateAndReverse, restricted_nDays_int 
 from PlottingUtilities import makeCircularHist, convertTimestampsToTimedeltas
 from NDBCBuoy import NDBCBuoy
 import numpy as np
@@ -8,24 +8,13 @@ import matplotlib.colors as mcolors
 import matplotlib.cm as cmx
 import traceback
 
-def getRecentSwellDirData(buoy: NDBCBuoy, useDB: bool, nDays: int) -> tuple[np.ndarray]:
-    if useDB:
-        buoy.fetchDataFromDB()
-        buoy.setSamplingPeriod(buoy.dataFrameRealtime)
-    else:
-        buoy.buildRealtimeDataFrame()
-
+def getRecentSwellDirData(buoy: NDBCBuoy, nDays: int) -> tuple[np.ndarray]:
     nSamples = buoy.convertRequestedDaysIntoSamples(nDays)
     dates = truncateAndReverse(buoy.dataFrameRealtime['Date'].to_numpy(), nSamples)
     swd = truncateAndReverse(buoy.dataFrameRealtime['SwD'].to_numpy(), nSamples)
     return dates, swd
 
-def getHistoricalSwellDirs(buoy: NDBCBuoy, useDB: bool) -> np.ndarray:
-    if useDB:
-        buoy.fetchDataFromDB()
-    else:
-        buoy.buildHistoricalDataFrame()
-
+def getHistoricalSwellDirs(buoy: NDBCBuoy) -> np.ndarray:
     swd = buoy.dataFrameHistorical['MWD'].to_numpy()
     return swd
 
@@ -79,8 +68,10 @@ def plotSwellDirs(dates: np.ndarray, swd: np.ndarray, historicalSwd: np.ndarray,
 def makeDirDistPlot(activeBOI: dict, useDB: bool, nDays: int, showPlots: bool):
     for stationID in activeBOI:
         try:
-            dates, swd = getRecentSwellDirData(NDBCBuoy(stationID), useDB, nDays)
-            historicalSwd = getHistoricalSwellDirs(NDBCBuoy(stationID), useDB)
+            buoy = NDBCBuoy(stationID)
+            buoy.fetchData(useDB)
+            dates, swd = getRecentSwellDirData(buoy, nDays)
+            historicalSwd = getHistoricalSwellDirs(buoy)
         except Exception as e:
             print(f'---------')
             print(f'EXCEPTION: {e}')
@@ -94,7 +85,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--bf", type=str, required=True, help="text file name containing buoys of interest")
     parser.add_argument("--db", action='store_true', help="use this flag if you are using a MySQL db instance")
-    parser.add_argument("--nDays", type=restricted_int, required=True, help="# of recent days worth of measurements to include in plots [1-44]")
+    parser.add_argument("--nDays", type=restricted_nDays_int, required=True, help="# of recent days worth of measurements to include in plots [1-44]")
     parser.add_argument("--show", action='store_true', help="use this flag if you want to display the figures instead of saving them")
 
     args = parser.parse_args()

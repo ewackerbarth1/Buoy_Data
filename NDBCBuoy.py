@@ -19,19 +19,15 @@ def cleanBuoyData(dfItem):
 class NDBCBuoy():
     def __init__(self, stationID: str):
         self.stationID = stationID
-        self.baseURLRealtime = 'https://www.ndbc.noaa.gov/data/realtime2/'
         self.swellDict = self.buildSwellDirDict()
-        self.urlRealtime = self.buildStationURLs()
         self.nYearsBack = 5   # number of years to go back for historical analysis
         self.nHistoricalMonths = 3 # number of months in historical data range
         self.nSecondsToPauseBtwnRequests = 5
 
         # default values
-        self.nSampsPerHour = None #-1
         self.dataFrameRealtime = []
         self.dataFrameHistorical = []
-        self.lat = 0.0
-        self.lon = 0.0
+        self.nSampsPerHour = -1
         self.recentWVHT = -1.0
         self.recentSwP = -1.0
         self.recentSwD = -1.0
@@ -62,10 +58,6 @@ class NDBCBuoy():
     
         return swellDirDict
 
-    def buildStationURLs(self) -> str:
-        urlRealtime = f'{self.baseURLRealtime}{self.stationID}.spec'
-        return urlRealtime
-
     def makeHistoricalDataRequest(self, year: int) -> requests.models.Response:
         historicalURL = f'https://www.ndbc.noaa.gov/view_text_file.php?filename={self.stationID}h{year}.txt.gz&dir=data/historical/stdmet/'
         print(f'requesting {historicalURL} after {self.nSecondsToPauseBtwnRequests}s pause...')
@@ -74,9 +66,10 @@ class NDBCBuoy():
         return ndbcPage
 
     def makeRealtimeDataRequest(self) -> requests.models.Response:
-        print(f'requesting {self.urlRealtime} after {self.nSecondsToPauseBtwnRequests}s pause...')
+        urlRealtime = f'https://www.ndbc.noaa.gov/data/realtime2/{self.stationID}.spec'
+        print(f'requesting {urlRealtime} after {self.nSecondsToPauseBtwnRequests}s pause...')
         time.sleep(self.nSecondsToPauseBtwnRequests)
-        ndbcPage = requests.get(self.urlRealtime)       #<class 'requests.models.Response'>
+        ndbcPage = requests.get(urlRealtime)       #<class 'requests.models.Response'>
         print(f'ndbcPage response for realtime data for station {self.stationID}: {ndbcPage}')
         if ndbcPage.status_code == 404:
             raise Exception(f'Could not connect to realtime data server for station {self.stationID}. This data might not exist for this station!')
@@ -96,15 +89,14 @@ class NDBCBuoy():
         buoyDF = pd.DataFrame(entryList[2:], columns = entryList[0])  # ignore first 2 rows
         return buoyDF
 
-    def setSamplingPeriod(self, buoyDF):
-        dateSeries = buoyDF['Date']
+    def setRealtimeSamplingRate(self):
+        dateSeries = self.dataFrameRealtime['Date']
         expectedInterval = pd.Timedelta(1, unit='hours')
         self.nSampsPerHour = 1
         thisInterval = dateSeries[0] - dateSeries[1]
         if thisInterval != expectedInterval:
             self.nSampsPerHour = round(expectedInterval.value / thisInterval.value)
             print(f'Detected sampling period of {thisInterval} instead of {expectedInterval} for this buoy! Setting self.nSamperPerHour to {self.nSampsPerHour}')
-
 
     def cleanRealtimeDataFrame(self, buoyDF):
         buoyDF['Date'] = buoyDF['#YY'] + buoyDF['MM'] + buoyDF['DD'] + buoyDF['hh'] + buoyDF['mm']# add a date column
@@ -133,7 +125,7 @@ class NDBCBuoy():
         ndbcPage = self.makeRealtimeDataRequest()
         rawDF = self.parseRealtimeData(ndbcPage)
         self.dataFrameRealtime = self.cleanRealtimeDataFrame(rawDF)
-        self.setSamplingPeriod(self.dataFrameRealtime)
+        self.setRealtimeSamplingRate()
     
     def getHistoricalYears(self, nYears: int) -> list:
         todaysDate = date.today()
@@ -219,32 +211,33 @@ class NDBCBuoy():
         self.dataFrameRealtime = dBInteractor.getRealtimeData(self.stationID)
 
     def setHistoricalDFFromDB(self, dBInteractor):
+        print(f'Setting historical dataframe for station {self.stationID}')
         self.dataFrameHistorical = dBInteractor.getHistoricalData(self.stationID)
-
-    def setLocation(self, buoyLatLon: tuple[float]):
-        self.lat, self.lon = buoyLatLon
 
     def fetchDataFromNDBCPage(self):
         self.buildRealtimeDataFrame()
         self.buildHistoricalDataFrame()
 
-    def fetchDataFromDB(self) -> bool:
+    def fetchDataFromDB(self):
         dBInteractor = DatabaseInteractor()
         if not dBInteractor.successfulConnection:
-            print('Connection failed so we cannot fetch any data')
-            return False
+            raise Exception('Attempt to connect to database failed')
 
         if not dBInteractor.checkForBuoyExistenceInDB(self.stationID):
-            print(f'station {self.stationID} does not exist in database!')
             dBInteractor.closeConnection()
-            return False
+            Exception(f'Station {self.stationID} does not exist in database!')
 
-        self.setBuoyLocationFromDB(dBInteractor)
+        #self.setBuoyLocationFromDB(dBInteractor)
         self.setRealtimeDFFromDB(dBInteractor)
         self.setHistoricalDFFromDB(dBInteractor)
-
         dBInteractor.closeConnection()
-        return True
+
+    def fetchData(self, useDB: bool):
+        if useDB:
+            self.fetchDataFromDB()
+        else:
+            self.fetchDataFromNDBCPage()
+        self.setRecentReadings()
 
     def setRecentReadings(self):
         self.recentWVHT = self.dataFrameRealtime['WVHT'].iloc[0]
@@ -252,6 +245,10 @@ class NDBCBuoy():
         self.recentSwD = self.dataFrameRealtime['SwD'].iloc[0]
 
     def calcWVHTPercentile(self, dataSetName: str) -> float:
+        if self.recentWVHT == -1:
+            print('setting recent swell readings...')
+            self.setRecentReadings()
+
         if dataSetName == 'historical':
             waveheightsSorted = self.dataFrameHistorical['WVHT'].sort_values().to_numpy() # ascending
         elif dataSetName == 'realtime':
@@ -274,24 +271,15 @@ class NDBCBuoy():
     def setWVHTPercentileRealtime(self):
         self.wvhtPercentileRealtime = self.calcWVHTPercentile('realtime')
 
-    def buildAnalysisProducts(self):
-        self.setRecentReadings()
-        self.setWVHTPercentileHistorical()
-        self.setWVHTPercentileRealtime()
-        self.setSamplingPeriod(self.dataFrameRealtime)
-
     def convertRequestedDaysIntoSamples(self, nDays: int) -> int:
         if nDays > 44:
-            print(f'Only have 44 days worth of realtime data so just plotting the last 45 days')
+            print(f'Only have 44 days worth of realtime data so just plotting the last 44 days')
             nDays = 44
+
+        if self.nSampsPerHour == -1:
+            print('Setting realtime sampling rate...')
+            self.setRealtimeSamplingRate()
+
         nSamples = 24 * self.nSampsPerHour * nDays   
         return nSamples
-
-    def getOrientedWvhtsAndDates(self, nSamples: int) -> tuple:
-        # reverse so that the most recent sample is the last array value
-        def truncateAndReverse(dataSeries: np.ndarray) -> np.ndarray:
-            truncated = dataSeries[:nSamples]
-            return truncated[::-1]
-
-        return truncateAndReverse(self.dataFrameRealtime['WVHT'].to_numpy()), truncateAndReverse(self.dataFrameRealtime['Date'].to_numpy())
 

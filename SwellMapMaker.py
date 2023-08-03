@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import argparse
 
 from NDBCBuoy import NDBCBuoy
-from BuoyDataUtilities import calculateBearingAngle, calcDistanceBetweenNM, getActiveBOI, convertSwellETAToDistance, convertDegreesToRadians, convertMetersToNM
+from BuoyDataUtilities import calcDistanceBetweenNM, getActiveBOI, convertSwellETAToDistance, convertDegreesToRadians, convertMetersToNM
 
 class SwellMapMaker():
     def __init__(self, currentLoc: tuple, useDB=True):
@@ -16,23 +16,15 @@ class SwellMapMaker():
         for stationID, stationLatLon in activeBOI.items():
             print(f'Instantiating NDBCBuoy {stationID}...')
             thisBuoy = NDBCBuoy(stationID)
+            
+            thisBuoy.fetchData(self.useDB)
 
-            if self.useDB:
-                fetchSuccess = thisBuoy.fetchDataFromDB()
-                if not fetchSuccess:
-                    print(f'Unable to fetch data for station {stationID} from database')
-                    continue
-            else:
-                thisBuoy.setLocation(stationLatLon)
-                thisBuoy.fetchDataFromNDBCPage()
-
-            thisBuoy.buildAnalysisProducts()
+            thisBuoy.setWVHTPercentileHistorical()
+            thisBuoy.setWVHTPercentileRealtime()
             distanceAway = calcDistanceBetweenNM(self.currentLoc, stationLatLon)
-
             buoyInfo = [stationID, stationLatLon[0], stationLatLon[1], distanceAway]
             buoyReadings = [thisBuoy.recentWVHT, thisBuoy.recentSwP, thisBuoy.recentSwD, thisBuoy.wvhtPercentileRealtime, thisBuoy.wvhtPercentileHistorical]
             hoverText = [f'{stationID}, wvht [m, %rt, %hi]: {thisBuoy.recentWVHT:0.1f}m / {thisBuoy.wvhtPercentileRealtime:0.0f}% / {thisBuoy.wvhtPercentileHistorical:0.0f}%, swp [s]: {thisBuoy.recentSwP}'] #{distanceAway:0.2f} NM away'
-
             thisBuoyData = buoyInfo + buoyReadings + hoverText
             boiData.append(thisBuoyData)
 

@@ -1,31 +1,22 @@
 import argparse
-from BuoyDataUtilities import getActiveBOI
+from BuoyDataUtilities import getActiveBOI, truncateAndReverse, restricted_nDays_int
 from NDBCBuoy import NDBCBuoy
 import numpy as np
 import matplotlib.pyplot as plt
 import traceback
 
-def truncateAndReverse(dataSeries: np.ndarray, nSamples: int) -> np.ndarray:
-    truncated = dataSeries[:nSamples]
-    return truncated[::-1]
-
 def getRecentSwellData(buoy: NDBCBuoy, useDB: bool, nDays: int) -> tuple[np.ndarray]:
     if useDB:
-        fetchSuccess = buoy.fetchDataFromDB()
-        if not fetchSuccess:
-            raise Exception(f'Unable to fetch data for station {stationID} from database')
-        buoy.setSamplingPeriod(buoy.dataFrameRealtime)
+        buoy.fetchDataFromDB()
     else:
         buoy.buildRealtimeDataFrame()
 
     nSamples = buoy.convertRequestedDaysIntoSamples(nDays)
-    print(f'nSamples = {nSamples}')
-    dates = truncateAndReverse(buoy.dataFrameRealtime['Date'].to_numpy(), nSamples)
-    wvhts = truncateAndReverse(buoy.dataFrameRealtime['WVHT'].to_numpy(), nSamples)
-    swp = truncateAndReverse(buoy.dataFrameRealtime['SwP'].to_numpy(), nSamples)
-    swd = truncateAndReverse(buoy.dataFrameRealtime['SwD'].to_numpy(), nSamples)
-    print(f'len(dates) = {len(dates)}')
-    return dates, wvhts, swp, swd
+    columnNames = ['Date', 'WVHT', 'SwP', 'SwD']
+    dataContainer = []
+    for colName in columnNames:
+        dataContainer.append(truncateAndReverse(buoy.dataFrameRealtime[colName].to_numpy(), nSamples))
+    return dataContainer[0], dataContainer[1], dataContainer[2], dataContainer[3] 
 
 def convertSwdToUV(swd: list):
     # we want the x-coordinate of our arrow to evolve as sin(x)
@@ -76,18 +67,11 @@ def makeRecentPlots(activeBOI: dict, useDB: bool, nDays: int, showPlots: bool):
 
         plotRecentData(dates, wvhts, swp, swd, stationID, showPlots)
 
-def restricted_int(x):
-    x = int(x)
-    if x < 1 or x > 44:
-        raise argparse.ArgumentTypeError(f"Value must be an integer between 1 and 44. Got {x}")
-
-    return x
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--bf", type=str, required=True, help="text file name containing buoys of interest")
     parser.add_argument("--db", action='store_true', help="use this flag if you are using a MySQL db instance")
-    parser.add_argument("--nDays", type=restricted_int, required=True, help="# of recent days worth of measurements to include in plots [1-44]")
+    parser.add_argument("--nDays", type=restricted_nDays_int, required=True, help="# of recent days worth of measurements to include in plots [1-44]")
     parser.add_argument("--show", action='store_true', help="use this flag if you want to display the figures instead of saving them")
 
     args = parser.parse_args()
