@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.cm as cmx
 
 def makeCircularHist(ax, x, bins=16, density=True, offset=0, gaps=True) -> tuple:
     """
@@ -82,4 +83,11 @@ def convertTimestampsToTimedeltas(timestamps: np.ndarray[np.datetime64]) -> np.n
     deltaMins = deltas.astype('timedelta64[m]')
     deltaHrs = -1 * deltaMins.astype('float') / 60
     return deltaHrs 
+
+def getColors(timeDeltas: np.ndarray, scalarMap: cmx.ScalarMappable) -> list[tuple]:
+    # map time deltas to [0, 1] 
+    maxTime = max(timeDeltas)
+    minTime = min(timeDeltas)
+    colors = [scalarMap.to_rgba((x - minTime) / (maxTime - minTime)) for x in timeDeltas]
+    return colors 
 

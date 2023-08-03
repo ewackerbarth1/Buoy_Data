@@ -1,6 +1,6 @@
 import argparse
 from BuoyDataUtilities import getActiveBOI, truncateAndReverse, restricted_nDays_int 
-from PlottingUtilities import makeCircularHist, convertTimestampsToTimedeltas
+from PlottingUtilities import makeCircularHist, convertTimestampsToTimedeltas, getColors
 from NDBCBuoy import NDBCBuoy
 import numpy as np
 import matplotlib.pyplot as plt
@@ -25,15 +25,7 @@ def getArrowCoordinates(swd: np.ndarray, r0: float) -> np.ndarray:
     arrowCoords[1, :] = np.linspace(0.5 * r0, r0, len(swdRad)) # arrow origin radius
     arrowCoords[2, :] = np.sin(swdRad) # U 
     arrowCoords[3, :] = np.cos(swdRad) # V 
-
     return arrowCoords
-
-def getArrowColors(timeDeltas: np.ndarray, scalarMap: cmx.ScalarMappable) -> list[tuple]:
-    # map time deltas to [0, 1] 
-    maxTime = max(timeDeltas)
-    minTime = min(timeDeltas)
-    arrowColors = [scalarMap.to_rgba((x - minTime) / (maxTime - minTime)) for x in timeDeltas]
-    return arrowColors
 
 def plotSwellDirs(dates: np.ndarray, swd: np.ndarray, historicalSwd: np.ndarray, stationID: str, showPlot: bool):
     fig, ax = plt.subplots(figsize=(10, 6), subplot_kw=dict(projection='polar'))
@@ -51,7 +43,7 @@ def plotSwellDirs(dates: np.ndarray, swd: np.ndarray, historicalSwd: np.ndarray,
     scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cmap)
     arrowCoords = getArrowCoordinates(swd, ax.get_ylim()[1])
     timeDeltas = convertTimestampsToTimedeltas(dates)
-    arrowColors = getArrowColors(timeDeltas, scalarMap)
+    arrowColors = getColors(timeDeltas, scalarMap)
     for idx in range(len(arrowColors)):
         ax.quiver(arrowCoords[0, idx], arrowCoords[1, idx], arrowCoords[2, idx], arrowCoords[3, idx], color=arrowColors[idx])
 
