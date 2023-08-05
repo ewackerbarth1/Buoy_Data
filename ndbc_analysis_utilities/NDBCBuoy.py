@@ -6,7 +6,7 @@ import pandas as pd
 import re
 import time
 from datetime import date, datetime, timedelta
-from DatabaseInteractor import DatabaseInteractor
+from .db_config.DatabaseInteractor import DatabaseInteractor
 
 
 def cleanBuoyData(dfItem):

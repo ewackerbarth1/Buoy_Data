@@ -1,7 +1,7 @@
 import argparse
-from DatabaseInteractor import DatabaseInteractor
-from NDBCBuoy import NDBCBuoy
-from BuoyDataUtilities import getActiveBOI
+from ndbc_analysis_utilities.db_config.DatabaseInteractor import DatabaseInteractor
+from ndbc_analysis_utilities.NDBCBuoy import NDBCBuoy
+from ndbc_analysis_utilities.BuoyDataUtilities import getActiveBOI
 
 def updateRealtimeData(activeBOI: dict):
     dbInteractor = DatabaseInteractor() 

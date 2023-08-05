@@ -3,8 +3,8 @@ import numpy as np
 import plotly.graph_objects as go
 import argparse
 
-from NDBCBuoy import NDBCBuoy
-from BuoyDataUtilities import calcDistanceBetweenNM, getActiveBOI, convertSwellETAToDistance, convertDegreesToRadians, convertMetersToNM
+from ndbc_analysis_utilities.NDBCBuoy import NDBCBuoy
+from ndbc_analysis_utilities.BuoyDataUtilities import calcDistanceBetweenNM, getActiveBOI, convertSwellETAToDistance, convertDegreesToRadians, convertMetersToNM
 
 class SwellMapMaker():
     def __init__(self, currentLoc: tuple, useDB=True):

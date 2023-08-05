@@ -1,7 +1,7 @@
 import argparse
-from BuoyDataUtilities import getActiveBOI, truncateAndReverse, restricted_nDays_int, getNthPercentileSampleWithoutPMF
-from PlottingUtilities import convertTimestampsToTimedeltas, getColors
-from NDBCBuoy import NDBCBuoy
+from ndbc_analysis_utilities.BuoyDataUtilities import getActiveBOI, truncateAndReverse, restricted_nDays_int, getNthPercentileSampleWithoutPMF
+from ndbc_analysis_utilities.PlottingUtilities import convertTimestampsToTimedeltas, getColors
+from ndbc_analysis_utilities.NDBCBuoy import NDBCBuoy
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt

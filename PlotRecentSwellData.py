@@ -1,6 +1,6 @@
 import argparse
-from BuoyDataUtilities import getActiveBOI, truncateAndReverse, restricted_nDays_int
-from NDBCBuoy import NDBCBuoy
+from ndbc_analysis_utilities.BuoyDataUtilities import getActiveBOI, truncateAndReverse, restricted_nDays_int
+from ndbc_analysis_utilities.NDBCBuoy import NDBCBuoy
 import numpy as np
 import matplotlib.pyplot as plt
 import traceback

@@ -1,7 +1,7 @@
 import pandas as pd
 import time
 from datetime import date, datetime, timedelta
-import config_local as config
+from . import config_local as config
 import pymysql
 import sys
 

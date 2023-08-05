@@ -1,7 +1,7 @@
 import argparse
-from NDBCBuoy import NDBCBuoy
-from BuoyDataUtilities import getActiveBOI, calcDistanceBetweenNM, convertDistanceToSwellETA, calculateBearingAngle, estimateDensityTophatKernel, getNthPercentileSample, restricted_nDays_int, truncateAndReverse
-from PlottingUtilities import convertTimestampsToTimedeltas
+from ndbc_analysis_utilities.NDBCBuoy import NDBCBuoy
+from ndbc_analysis_utilities.BuoyDataUtilities import getActiveBOI, calcDistanceBetweenNM, convertDistanceToSwellETA, calculateBearingAngle, estimateDensityTophatKernel, getNthPercentileSample, restricted_nDays_int, truncateAndReverse
+from ndbc_analysis_utilities.PlottingUtilities import convertTimestampsToTimedeltas
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -63,7 +63,7 @@ def makeWvhtDistributionPlot(buoy: NDBCBuoy, nDays: int, bearingAngle: float, ar
         # determine whether to plot arrival window
         if len(arrivalWindow) == 2:
             print(f'arrivalWindow = {arrivalWindow}')
-            print(f'min time lag = {buoy.arrivalWindow[0]: 0.2f}hrs, max time lag = {buoy.arrivalWindow[1]: 0.2f}hrs')
+            print(f'min time lag = {arrivalWindow[0]: 0.2f}hrs, max time lag = {arrivalWindow[1]: 0.2f}hrs')
             ax.fill_betweenx([min(waveheights), max(waveheights)], -1*arrivalWindow[1], -1*arrivalWindow[0], color='darkblue', alpha=0.4, label='currently arriving', zorder=1)
 
     def plotDistributions():
@@ -83,8 +83,9 @@ def makeWvhtDistributionPlot(buoy: NDBCBuoy, nDays: int, bearingAngle: float, ar
     else:
         plt.savefig(f'station_{buoy.stationID}_wvhtsdist.png', format='png')
 
-def checkForArrivalWindow(swellDir: float, bearingAngle: float):
-    # check if swell reaches station before current location 
+def checkForArrivalWindow(swellDir: float, bearingAngle: float, distanceAway: float):
+    # check if swell reaches station before current location
+    # TODO: this is wrong right now!!!
     dDir = bearingAngle - swellDir
     if dDir > 180:
         dDir -= 360
@@ -95,7 +96,6 @@ def checkForArrivalWindow(swellDir: float, bearingAngle: float):
     if abs(dDir) < 90:
         # calculate arrival window, TODO: calculate projected distance along the bearing angle line
         minSwellPeriod, maxSwellPeriod = 12, 18
-        distanceAway = calcDistanceBetweenNM(currentLoc, stationLatLon)
         maxArrivalLag = convertDistanceToSwellETA(minSwellPeriod, distanceAway)
         minArrivalLag = convertDistanceToSwellETA(maxSwellPeriod, distanceAway)
         arrivalWindow = [minArrivalLag, maxArrivalLag]
@@ -111,7 +111,7 @@ def makeWVHTDistributionPlots(activeBOI: dict, args: argparse.Namespace):
         thisBuoy.fetchData(args.db)
 
         bearingAngle = calculateBearingAngle(stationLatLon, currentLoc)  # from buoy to current location in degrees
-        arrivalWindow = checkForArrivalWindow(thisBuoy.recentSwD, bearingAngle)
+        arrivalWindow = checkForArrivalWindow(thisBuoy.recentSwD, bearingAngle, calcDistanceBetweenNM(currentLoc, stationLatLon))
 
         makeWvhtDistributionPlot(thisBuoy, args.nDays, bearingAngle, arrivalWindow, args.show)
 
