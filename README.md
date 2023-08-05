@@ -1,7 +1,7 @@
 
 ## Conda Package Manager
 
-`conda env create -f CondaInstallEnvironment.yml`
+`conda env create -f requirements_conda.yml`
 
 ## Example Usage
 
@@ -46,7 +46,7 @@ Reference the sample_config.py file for the variable expected in the database co
 Once the database is configured, we add data to it using the UpdateSwellDB.py script. We use the same script to update the real-time and historical data for our desired stations.
 Here is an example call to UpdateSwellDB.py:
 
-`python ndbc_analysis_utilities\UpdateSwellDB.py --bf buoy_files\ExampleBOI.txt`
+`python UpdateSwellDB.py --bf buoy_files\ExampleBOI.txt`
 
 Provided the database is updated, we can set the `--db` flag on our analysis scripts in order to query the database for station data instead of the NDBC webpage. 
 For example:
