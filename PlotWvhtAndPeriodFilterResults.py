@@ -1,26 +1,39 @@
 import argparse
-from BuoyDataUtilities import getActiveBOI, getMonthlyDF
-from NDBCBuoy import NDBCBuoy
+from ndbc_analysis_utilities.BuoyDataUtilities import getActiveBOI, getMonthlyDF
+from ndbc_analysis_utilities.NDBCBuoy import NDBCBuoy
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
-def getPercentageForThisMonth(df: pd.core.frame.DataFrame, month: int, minPeriod: float, minWvht: float) -> float:
-    monthDF = getMonthlyDF(df, month)
+def getJointPercentage(monthDF: pd.core.frame.DataFrame, minPeriod: float, minWvht: float) -> float:
     percentThatMetThreshold = len(monthDF[(monthDF['DPD'] >= minPeriod) & (monthDF['WVHT'] >= minWvht)]) / len(monthDF) * 100
     return percentThatMetThreshold
 
-def processHistoricalDataThroughFilter(buoy: NDBCBuoy, minPeriod: float, minWvht: float) -> list:
-    return [getPercentageForThisMonth(buoy.dataFrameHistorical, month, minPeriod, minWvht) for month in range(1, 13)]
+def getMeasurementPercentage(monthDF: pd.core.frame.DataFrame, colName: str, minValue: float) -> float:
+    percentThatMetThreshold = len(monthDF[monthDF[colName] >= minValue]) / len(monthDF) * 100
+    return percentThatMetThreshold
 
-def plotPercentAboveThreshold(metThresholdPercentages: list, minPeriod: float, minWvht: float, stationID: str, showPlot: bool):
+def processHistoricalDataThroughFilter(df: pd.core.frame.DataFrame, minPeriod: float, minWvht: float) -> list:
+    jointResults, periodResults, wvhtResults = [], [], []
+    for month in range(1, 13):
+        monthDF = getMonthlyDF(df, month)
+        jointResults.append(getJointPercentage(monthDF, minPeriod, minWvht))
+        periodResults.append(getMeasurementPercentage(monthDF, 'DPD', minPeriod))
+        wvhtResults.append(getMeasurementPercentage(monthDF, 'WVHT', minWvht))
+
+    return jointResults, periodResults, wvhtResults
+
+def plotPercentAboveThreshold(jointResults: list, periodResults: list, wvhtResults: list, minPeriod: float, minWvht: float, stationID: str, showPlot: bool):
     months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    plt.plot(months, metThresholdPercentages, 'o-', color="royalblue", zorder=2)
+    plt.plot(months, periodResults, 'o-', color="darkorange", zorder=2, label="period filter")
+    plt.plot(months, wvhtResults, 'o-', color="seagreen", zorder=2, label="wvht filter")
+    plt.plot(months, jointResults, 'o-', color="royalblue", zorder=2, label="joint filter")
     plt.title(f'% of station {stationID} measurements above {minPeriod:.1f} s period and {minWvht:.1f} m wvht')
     plt.xlabel('Month')
     plt.ylabel('% above threshold')
     plt.ylim([-5, 105])
     plt.grid(zorder=1)
+    plt.legend()
 
     if showPlot:
         plt.show()
@@ -34,9 +47,9 @@ def makePeriodWvhtFilterPlots(activeBOI: dict, nYearsBack: int, showPlots: bool,
         thisBuoy.nHistoricalMonths = 12
         thisBuoy.buildHistoricalDataFrame()
 
-        metThresholdPercentages = processHistoricalDataThroughFilter(thisBuoy, minPeriod, minWvht)
-        print(f"met period and wvht threshold percentages = {[f'{x:.2f}' for x in metThresholdPercentages]}")
-        plotPercentAboveThreshold(metThresholdPercentages, minPeriod, minWvht, stationID, showPlots)
+        joint, period, wvht = processHistoricalDataThroughFilter(thisBuoy.dataFrameHistorical, minPeriod, minWvht)
+        print(f"met period and wvht threshold percentages = {[f'{x:.2f}' for x in joint]}")
+        plotPercentAboveThreshold(joint, period, wvht, minPeriod, minWvht, stationID, showPlots)
 
 def main():
     parser = argparse.ArgumentParser()

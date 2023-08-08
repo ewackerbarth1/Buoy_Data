@@ -1,6 +1,6 @@
 import argparse
-from BuoyDataUtilities import getActiveBOI, getMonthlyDF, getMonthName, getNthPercentileSampleWithoutPMF
-from NDBCBuoy import NDBCBuoy
+from ndbc_analysis_utilities.BuoyDataUtilities import getActiveBOI, getMonthlyDF, getMonthName, getNthPercentileSampleWithoutPMF
+from ndbc_analysis_utilities.NDBCBuoy import NDBCBuoy
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
