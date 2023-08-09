@@ -208,6 +208,11 @@ class DatabaseInteractor():
         historicalDF = convertJSONStrToDF(historicalJSONStr)
         return historicalDF
 
+    def removeStationsTableEntry(self, stationID):
+        thisCursor = self.connection.cursor()
+        thisCursor.execute('DELETE FROM stations WHERE id = %s', (stationID,))
+        thisCursor.close()
+        
     def closeConnection(self):
         self.connection.close()
 
