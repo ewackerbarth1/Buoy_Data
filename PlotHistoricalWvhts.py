@@ -1,6 +1,7 @@
 import argparse
 from ndbc_analysis_utilities.BuoyDataUtilities import getActiveBOI, getMonthlyDF
 from ndbc_analysis_utilities.NDBCBuoy import NDBCBuoy
+from ndbc_analysis_utilities.HistoricalAnalysisUtilities import getCompleteHistoricalDataFrame
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -22,11 +23,11 @@ def getPercentileSample(wvhts: np.ndarray, nthPercentile: int) -> np.float64:
     sortedWvhts = np.sort(wvhts)
     return sortedWvhts[ithSample]
 
-def processHistoricalData(buoy: NDBCBuoy, minPeriod: float) -> tuple:
+def processHistoricalData(df: pd.core.frame.DataFrame, minPeriod: float) -> tuple:
     percentileData = [[], []]
     metPeriodThresholdPercentages = []
     for month in range(1, 13):
-        monthlyData, thresholdPercentage = getMonthlyData(buoy.dataFrameHistorical, month, minPeriod)
+        monthlyData, thresholdPercentage = getMonthlyData(df, month, minPeriod)
         metPeriodThresholdPercentages.append(thresholdPercentage)
         percentileData[0].append(getPercentileSample(monthlyData, 50))
         percentileData[1].append(getPercentileSample(monthlyData, 90))
@@ -69,12 +70,9 @@ def plotWvhts(percentileData: list, stationID: str, showPlot: bool, markerSizeDa
 
 def plotWvhtsForStations(activeBOI: dict, nYearsBack: int, showPlots: bool, minPeriod: float):
     for stationID in activeBOI:
-        thisBuoy = NDBCBuoy(stationID)
-        thisBuoy.nYearsBack = nYearsBack
-        thisBuoy.nHistoricalMonths = 12
-        thisBuoy.buildHistoricalDataFrame()
+        df = getCompleteHistoricalDataFrame(NDBCBuoy(stationID), nYearsBack)
 
-        percentileData, metThresholdPercentages = processHistoricalData(thisBuoy, minPeriod)
+        percentileData, metThresholdPercentages = processHistoricalData(df, minPeriod)
 
         plotWvhts(percentileData, stationID, showPlots, metThresholdPercentages, minPeriod)
 
